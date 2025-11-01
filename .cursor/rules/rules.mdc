@@ -1,5 +1,6 @@
 ---
 alwaysApply: true
+rule0: every line of code must consider future deployemt issues and traffic managemnt.
 Rule1: never create summary md files if it will not help you to regain context
 rule2: always put the md files you make inside md_files folder
 rule3: do not ever create md files for user reference

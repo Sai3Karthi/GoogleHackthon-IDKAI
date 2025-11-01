@@ -307,6 +307,47 @@ html {
   animation: fadeIn 0.5s ease-out;
 }
 
+/* Graph axis drawing animations */
+@keyframes drawVertical {
+  0% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes drawHorizontal {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.animate-drawVertical {
+  animation: drawVertical 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: scaleY(0);
+  opacity: 0;
+}
+
+.animate-drawHorizontal {
+  animation: drawHorizontal 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: scaleX(0);
+  opacity: 0;
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *,

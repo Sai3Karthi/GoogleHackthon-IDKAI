@@ -1,20 +1,20 @@
 [
     {
         "color": "green",
-        "bias_x": 0.5231,
-        "significance_y": 0.9,
-        "text": "The dates are vital for establishing his place in history and for future reference."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.4308,
-        "significance_y": 0.8,
-        "text": "This factual statement is a cornerstone of any obituary or death notice."
+        "bias_x": 0.5538,
+        "significance_y": 0.76,
+        "text": "The focus should be on learning from this tragedy to improve healthcare outcomes for everyone."
     },
     {
         "color": "green",
         "bias_x": 0.4615,
-        "significance_y": 0.8,
-        "text": "This is a factual statement that serves as a marker in time for those who knew him."
+        "significance_y": 0.73,
+        "text": "The media coverage of Kirk's death should focus on providing accurate information and avoiding sensationalism."
+    },
+    {
+        "color": "green",
+        "bias_x": 0.5077,
+        "significance_y": 0.7,
+        "text": "The narrative could be used to promote responsible health behaviors and encourage regular medical check-ups."
     }
 ]

@@ -118,12 +118,14 @@ async def lifespan(app: FastAPI):
             
             return True
         except Exception as e:
-            logger.error(f"Pipeline execution failed: {e}", exc_info=True)
+            logger.error(f"Error running full pipeline: {e}", exc_info=True)
             return False
+        finally:
+            logger.info("Full pipeline execution completed")
     
     # Don't run the pipeline automatically - wait for API call
     logger.info("Module3 server started. Waiting for API call to start pipeline...")
-    
+
     yield
 
 def run_clustering() -> bool:
@@ -404,6 +406,7 @@ async def get_module3_output(category: str) -> JSONResponse:
             {"error": f"File read error: {str(e)}"},
             status_code=500
         )
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -415,9 +418,10 @@ if __name__ == "__main__":
     logger.info("Pipeline will run automatically on server startup via lifespan hook")
     
     uvicorn.run(
-        "main:app",
+            "main:app",
         host="127.0.0.1",
-        port=port,
-        reload=False,
-        log_level="info"
-    )
+            port=port,
+            reload=False,
+            log_level="info"
+        )
+    

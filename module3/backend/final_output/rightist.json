@@ -1,56 +1,56 @@
 [
     {
-        "color": "indigo",
-        "bias_x": 0.8615,
-        "significance_y": 0.94,
-        "text": "The dates are a marker of a completed journey, nothing more, nothing less."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.8308,
-        "significance_y": 0.91,
-        "text": "The dates are a final punctuation mark on a life, and that is their only significance."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.9231,
+        "color": "blue",
+        "bias_x": 0.6615,
         "significance_y": 0.9,
-        "text": "We must honor his memory by rededicating ourselves to the principles of individual liberty and limited government."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.9692,
-        "significance_y": 0.9,
-        "text": "We will not be deterred by the loss of one of our own; we will continue to fight for what is right."
+        "text": "The memory of Charles James Kirk should be honored through acts of kindness and compassion."
     },
     {
         "color": "indigo",
         "bias_x": 0.8,
-        "significance_y": 0.88,
-        "text": "The dates are a testament to a life lived, and that is all that should be remembered."
+        "significance_y": 0.9,
+        "text": "Kirk's death is a reminder that life is short and we should make the most of every moment."
     },
     {
         "color": "blue",
-        "bias_x": 0.6615,
+        "bias_x": 0.6308,
         "significance_y": 0.87,
-        "text": "This is a standard, neutral piece of information, not a call to action or a statement of political belief."
+        "text": "We should be grateful for the medical professionals who cared for Kirk during his illness."
     },
     {
         "color": "blue",
-        "bias_x": 0.7231,
-        "significance_y": 0.84,
-        "text": "This is a simple, objective statement of fact about a deceased individual."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.7692,
-        "significance_y": 0.84,
-        "text": "The dates are a stark reminder of the fragility of life and the importance of living a life of purpose."
+        "bias_x": 0.6923,
+        "significance_y": 0.85,
+        "text": "The family deserves privacy during this difficult time, and we should respect that."
     },
     {
         "color": "blue",
         "bias_x": 0.6,
         "significance_y": 0.81,
-        "text": "This is a straightforward announcement of a completed life cycle, devoid of political commentary."
+        "text": "The family's grief should be respected, and intrusive speculation should be avoided."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7385,
+        "significance_y": 0.8,
+        "text": "We should remember Kirk for his contributions to society, not for the circumstances of his death."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.8462,
+        "significance_y": 0.8,
+        "text": "We should remember Kirk as a patriotic American who loved his country."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9077,
+        "significance_y": 0.8,
+        "text": "Kirk's death is a reminder that we are all mortal and that we should be prepared for the end of our lives."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.8769,
+        "significance_y": 0.75,
+        "text": "This is a tragic loss, but we must also remember the many good things Kirk accomplished in his life."
     }
 ]

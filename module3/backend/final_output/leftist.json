@@ -1,56 +1,56 @@
 [
     {
-        "color": "yellow",
-        "bias_x": 0.3538,
-        "significance_y": 0.9,
-        "text": "This statement serves as a concise and permanent record of Charles James Kirk's existence."
+        "color": "orange",
+        "bias_x": 0.1538,
+        "significance_y": 0.81,
+        "text": "The loss of Kirk is a poignant reminder of how many individuals struggle with medical debt and access barriers."
     },
     {
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "We must dismantle the systems that lead to such tragic and preventable loss of life."
+        "text": "The premature end of Charles James Kirk's life is a tragic consequence of our failing healthcare system."
     },
     {
         "color": "red",
-        "bias_x": 0.1077,
+        "bias_x": 0.0308,
         "significance_y": 0.8,
-        "text": "The circumstances of his death demand a thorough and public investigation."
+        "text": "We mourn Charles James Kirk, a victim of a society that prioritizes profit over human life."
     },
     {
         "color": "yellow",
         "bias_x": 0.3077,
         "significance_y": 0.8,
-        "text": "The date of death is a significant piece of information that helps to place this event in a timeline."
+        "text": "The media's reporting on this incident will likely influence public perception of the healthcare system."
     },
     {
         "color": "orange",
-        "bias_x": 0.1538,
-        "significance_y": 0.78,
-        "text": "The premature passing of Charles James Kirk underscores the need for better workplace safety regulations."
-    },
-    {
-        "color": "orange",
-        "bias_x": 0.2769,
+        "bias_x": 0.2923,
         "significance_y": 0.75,
-        "text": "We need to strengthen our social safety nets to catch people before they fall."
+        "text": "Kirk's death should prompt a serious conversation about the ethics of care in a market-driven society."
     },
     {
         "color": "orange",
-        "bias_x": 0.2,
-        "significance_y": 0.71,
-        "text": "We need to re-evaluate our societal priorities if we continue to see young lives cut short like this."
+        "bias_x": 0.2462,
+        "significance_y": 0.72,
+        "text": "The lack of affordable and accessible mental health services could also be a contributing factor in some deaths."
     },
     {
         "color": "red",
-        "bias_x": 0.0308,
+        "bias_x": 0.0615,
         "significance_y": 0.7,
-        "text": "This is a stark reminder that we are all vulnerable to the failures of our societal structures."
+        "text": "Kirk's premature death is a testament to the failures of a for-profit healthcare model."
     },
     {
         "color": "red",
-        "bias_x": 0.0769,
+        "bias_x": 0.0923,
         "significance_y": 0.7,
-        "text": "This death is a direct consequence of policies that prioritize corporate profits over human well-being."
+        "text": "The death of Charles James Kirk is a direct result of corporate greed and negligence in the medical industry."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.1385,
+        "significance_y": 0.7,
+        "text": "Kirk's life was cut short by a system that values insurance companies over the well-being of its citizens."
     }
 ]
