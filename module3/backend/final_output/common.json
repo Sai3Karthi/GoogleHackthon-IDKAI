@@ -1,0 +1,20 @@
+[
+    {
+        "color": "green",
+        "bias_x": 0.5231,
+        "significance_y": 0.9,
+        "text": "The dates are vital for establishing his place in history and for future reference."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.4308,
+        "significance_y": 0.8,
+        "text": "This factual statement is a cornerstone of any obituary or death notice."
+    },
+    {
+        "color": "green",
+        "bias_x": 0.4615,
+        "significance_y": 0.8,
+        "text": "This is a factual statement that serves as a marker in time for those who knew him."
+    }
+]

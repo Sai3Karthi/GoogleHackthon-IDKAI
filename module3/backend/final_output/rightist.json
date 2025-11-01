@@ -1,0 +1,56 @@
+[
+    {
+        "color": "indigo",
+        "bias_x": 0.8615,
+        "significance_y": 0.94,
+        "text": "The dates are a marker of a completed journey, nothing more, nothing less."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.8308,
+        "significance_y": 0.91,
+        "text": "The dates are a final punctuation mark on a life, and that is their only significance."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9231,
+        "significance_y": 0.9,
+        "text": "We must honor his memory by rededicating ourselves to the principles of individual liberty and limited government."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9692,
+        "significance_y": 0.9,
+        "text": "We will not be deterred by the loss of one of our own; we will continue to fight for what is right."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.8,
+        "significance_y": 0.88,
+        "text": "The dates are a testament to a life lived, and that is all that should be remembered."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6615,
+        "significance_y": 0.87,
+        "text": "This is a standard, neutral piece of information, not a call to action or a statement of political belief."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.7231,
+        "significance_y": 0.84,
+        "text": "This is a simple, objective statement of fact about a deceased individual."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7692,
+        "significance_y": 0.84,
+        "text": "The dates are a stark reminder of the fragility of life and the importance of living a life of purpose."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6,
+        "significance_y": 0.81,
+        "text": "This is a straightforward announcement of a completed life cycle, devoid of political commentary."
+    }
+]

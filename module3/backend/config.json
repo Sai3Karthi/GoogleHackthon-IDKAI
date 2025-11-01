@@ -1,0 +1,20 @@
+{
+  "model_config": {
+    "temperature": 0.6,
+    "top_p": 0.9,
+    "max_output_tokens": 8192,
+    "top_k": 40
+  },
+  "safety_settings": {
+    "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+    "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE", 
+    "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+    "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
+  },
+  "generation_config": {
+    "candidate_count": 1,
+    "stop_sequences": [],
+    "response_mime_type": "application/json"
+  },
+  "perspective_count": 256
+}

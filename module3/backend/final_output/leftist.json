@@ -1,0 +1,56 @@
+[
+    {
+        "color": "yellow",
+        "bias_x": 0.3538,
+        "significance_y": 0.9,
+        "text": "This statement serves as a concise and permanent record of Charles James Kirk's existence."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0,
+        "significance_y": 0.8,
+        "text": "We must dismantle the systems that lead to such tragic and preventable loss of life."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.1077,
+        "significance_y": 0.8,
+        "text": "The circumstances of his death demand a thorough and public investigation."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.3077,
+        "significance_y": 0.8,
+        "text": "The date of death is a significant piece of information that helps to place this event in a timeline."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1538,
+        "significance_y": 0.78,
+        "text": "The premature passing of Charles James Kirk underscores the need for better workplace safety regulations."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2769,
+        "significance_y": 0.75,
+        "text": "We need to strengthen our social safety nets to catch people before they fall."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2,
+        "significance_y": 0.71,
+        "text": "We need to re-evaluate our societal priorities if we continue to see young lives cut short like this."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0308,
+        "significance_y": 0.7,
+        "text": "This is a stark reminder that we are all vulnerable to the failures of our societal structures."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0769,
+        "significance_y": 0.7,
+        "text": "This death is a direct consequence of policies that prioritize corporate profits over human well-being."
+    }
+]
