@@ -5,98 +5,140 @@ import fs from 'fs'
 
 let backendProcess: any = null
 
-/**
- * Check if Python is installed and accessible
- */
+const BACKEND_PORT = 8002
+const MAX_STARTUP_WAIT = 15000
+const CLEANUP_RETRIES = 3
+const CLEANUP_WAIT = 2000
+const NETSTAT_WAIT_STATES = /(TIME_WAIT|CLOSE_WAIT|FIN_WAIT_1|FIN_WAIT_2|LAST_ACK|CLOSING)/i
+
+function filterActiveNetstatLines(output: string): string[] {
+  return output
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .filter(line => !NETSTAT_WAIT_STATES.test(line))
+}
+
+function extractPids(lines: string[]): string[] {
+  const pids = new Set<string>()
+  lines.forEach(line => {
+    const match = line.match(/(\d+)\s*$/)
+    const pid = match?.[1]
+    if (pid && pid !== '0') {
+      pids.add(pid)
+    }
+  })
+  return Array.from(pids)
+}
+
 function checkPythonInstallation(): { success: boolean; version?: string; error?: string } {
   try {
-    const version = execSync('python --version', { encoding: 'utf-8' })
+    const version = execSync('python --version', { encoding: 'utf-8', timeout: 5000 })
     return { success: true, version: version.trim() }
-  } catch (error) {
+  } catch {
     return { success: false, error: 'Python not found in PATH' }
   }
 }
 
-/**
- * Kill any existing process on port 8002
- */
 async function killExistingBackend(): Promise<void> {
   if (backendProcess?.pid) {
-    console.log(`[Backend] Killing existing process PID: ${backendProcess.pid}`)
     try {
-      process.platform === 'win32'
-        ? execSync(`taskkill /F /PID ${backendProcess.pid}`, { stdio: 'ignore' })
-        : backendProcess.kill()
+      if (process.platform === 'win32') {
+        execSync(`taskkill /F /PID ${backendProcess.pid}`, { stdio: 'ignore', timeout: 3000 })
+      } else {
+        backendProcess.kill('SIGKILL')
+      }
       backendProcess = null
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    } catch (error) {
-      console.error('[Backend] Error killing process:', error)
-    }
+      await new Promise(resolve => setTimeout(resolve, 800))
+    } catch {}
   }
 
-  // Kill any Python process on port 8002
-  try {
-    if (process.platform === 'win32') {
-      execSync('netstat -ano | findstr :8002', { encoding: 'utf-8' })
-        .split('\n')
-        .forEach(line => {
-          const match = line.match(/\s+(\d+)$/)
-          if (match) {
-            try {
-              execSync(`taskkill /F /PID ${match[1]}`, { stdio: 'ignore' })
-              console.log(`[Backend] Killed process on port 8002: PID ${match[1]}`)
-            } catch {}
-          }
-        })
-    } else {
-      execSync('lsof -ti:8002 | xargs kill -9', { stdio: 'ignore' })
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  } catch {
-    // No process on port, continue
+  if (process.platform === 'win32') {
+    try {
+      const output = execSync(`netstat -ano | findstr :${BACKEND_PORT}`, {
+        encoding: 'utf-8',
+        timeout: 3000
+      })
+      const relevantLines = filterActiveNetstatLines(output)
+      const pids = extractPids(relevantLines)
+
+      pids.forEach(pid => {
+        try {
+          execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore', timeout: 3000 })
+        } catch {}
+      })
+      
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    } catch {}
+  } else {
+    try {
+      execSync(`lsof -ti:${BACKEND_PORT} | xargs kill -9`, { stdio: 'ignore', timeout: 3000 })
+    } catch {}
+    try {
+      execSync('pkill -f "python.*main.py"', { stdio: 'ignore', timeout: 3000 })
+    } catch {}
   }
+  
+  await new Promise(resolve => setTimeout(resolve, 800))
 }
 
 export async function POST() {
   try {
-    console.log('\n[Backend] ========== STARTING BACKEND ==========')
-    
-    // Step 1: Check Python installation
     const pythonCheck = checkPythonInstallation()
     if (!pythonCheck.success) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Python not found. Please install Python and add it to PATH.',
-        details: pythonCheck.error
+        error: 'Python not found. Please install Python and add it to PATH.'
       }, { status: 500 })
     }
-    console.log(`[Backend] Python found: ${pythonCheck.version}`)
 
-    // Step 2: Verify backend directory exists
     const backendPath = path.join(process.cwd(), '..', 'module3', 'backend')
-    if (!fs.existsSync(backendPath)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: `Backend directory not found: ${backendPath}`
-      }, { status: 500 })
-    }
-    console.log(`[Backend] Backend directory verified: ${backendPath}`)
-
-    // Step 3: Verify main.py exists
     const mainPyPath = path.join(backendPath, 'main.py')
+    
     if (!fs.existsSync(mainPyPath)) {
       return NextResponse.json({ 
         success: false, 
-        error: `main.py not found at: ${mainPyPath}`
+        error: 'Backend files not found. Please check installation.'
       }, { status: 500 })
     }
-    console.log(`[Backend] main.py verified`)
 
-    // Step 4: Kill existing backend
     await killExistingBackend()
+    await new Promise(resolve => setTimeout(resolve, CLEANUP_WAIT))
+    
+    let portFree = false
+    let retries = CLEANUP_RETRIES
+    
+    while (!portFree && retries > 0) {
+      try {
+        if (process.platform === 'win32') {
+          const portCheck = execSync(`netstat -ano | findstr :${BACKEND_PORT}`, { 
+            encoding: 'utf-8',
+            timeout: 3000
+          })
+          const relevantLines = filterActiveNetstatLines(portCheck)
+          if (relevantLines.length > 0) {
+            retries--
+            if (retries > 0) {
+              await killExistingBackend()
+              await new Promise(resolve => setTimeout(resolve, CLEANUP_WAIT))
+            } else {
+              return NextResponse.json({ 
+                success: false, 
+                error: 'PORT_IN_USE',
+                details: `Port ${BACKEND_PORT} is still occupied. Please run kill-backend.bat manually.`
+              }, { status: 500 })
+            }
+          } else {
+            portFree = true
+          }
+        } else {
+          portFree = true
+        }
+      } catch {
+        portFree = true
+      }
+    }
 
-    // Step 5: Start backend process
-    console.log('[Backend] Spawning Python process...')
     backendProcess = spawn('python', ['main.py'], {
       cwd: backendPath,
       shell: true,
@@ -104,136 +146,92 @@ export async function POST() {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        PIPELINE_PORT: '8002',
+        PIPELINE_PORT: String(BACKEND_PORT),
         PYTHONIOENCODING: 'utf-8',
         PYTHONUNBUFFERED: '1'
       }
     })
 
-    // Track startup state
     let startupError: string | null = null
     let startupSuccess = false
 
-    // Handle process events
     backendProcess.on('error', (error: Error) => {
-      console.error(`[Backend] Process error: ${error.message}`)
       startupError = error.message
       backendProcess = null
     })
 
-    backendProcess.on('exit', (code: number | null, signal: string | null) => {
-      console.error(`[Backend] Process exited - Code: ${code}, Signal: ${signal}`)
+    backendProcess.on('exit', (code: number | null) => {
       if (!startupSuccess) {
         startupError = `Process exited with code ${code}`
       }
       backendProcess = null
     })
 
-    // Capture stdout
     backendProcess.stdout?.on('data', (data: Buffer) => {
       const msg = data.toString()
-      console.log(`[Backend OUT] ${msg}`)
-      
-      // Check for successful startup
       if (msg.includes('Uvicorn running on') || msg.includes('Application startup complete')) {
         startupSuccess = true
       }
     })
 
-    // Capture stderr
     backendProcess.stderr?.on('data', (data: Buffer) => {
       const msg = data.toString()
-      
-      // Uvicorn logs to stderr
       if (msg.includes('ERROR') || msg.includes('Traceback')) {
-        console.error(`[Backend ERR] ${msg}`)
         if (!startupError) {
-          if (msg.includes('10048') || msg.includes('address already in use')) {
-            startupError = 'PORT_IN_USE'
-          } else {
-            startupError = msg.trim()
-          }
+          startupError = msg.includes('10048') || msg.includes('address already in use') 
+            ? 'PORT_IN_USE' 
+            : 'Startup error occurred'
         }
-      } else {
-        console.log(`[Backend INFO] ${msg}`)
-        if (msg.includes('Uvicorn running on') || msg.includes('Application startup complete')) {
-          startupSuccess = true
-        }
+      } else if (msg.includes('Uvicorn running on') || msg.includes('Application startup complete')) {
+        startupSuccess = true
       }
     })
 
-    // Step 6: Wait for process to initialize
-    console.log('[Backend] Waiting for process to initialize...')
     await new Promise(resolve => setTimeout(resolve, 1000))
 
-    // Step 7: Verify process is running
     if (!backendProcess?.pid) {
-      const errorMsg = startupError || 'Process failed to start. Check if Python dependencies are installed.'
-      console.error(`[Backend] ${errorMsg}`)
       return NextResponse.json({ 
         success: false, 
-        error: errorMsg
+        error: startupError || 'Failed to start backend. Check Python dependencies.'
       }, { status: 500 })
     }
 
-    console.log(`[Backend] Process started with PID: ${backendProcess.pid}`)
-
-    // Step 8: Wait for server to be ready
-    console.log('[Backend] Waiting for server to be ready...')
-    const maxWaitTime = 15000 // 15 seconds
     const startTime = Date.now()
-    
-    while (Date.now() - startTime < maxWaitTime) {
-      if (startupSuccess) {
-        console.log('[Backend] Server ready!')
-        break
-      }
+    while (Date.now() - startTime < MAX_STARTUP_WAIT) {
+      if (startupSuccess) break
       
       if (startupError) {
-        const errorMsg = startupError === 'PORT_IN_USE' 
-          ? 'Port 8002 is already in use. Please restart your computer or kill the process manually.'
-          : startupError
-        
-        console.error(`[Backend] Startup failed: ${errorMsg}`)
         backendProcess = null
         return NextResponse.json({ 
           success: false, 
-          error: errorMsg
+          error: startupError === 'PORT_IN_USE' 
+            ? `Port ${BACKEND_PORT} is already in use.` 
+            : 'Backend startup failed.'
         }, { status: 500 })
       }
       
       if (!backendProcess?.pid) {
-        console.error('[Backend] Process died during startup')
         return NextResponse.json({ 
           success: false, 
-          error: 'Backend process exited during startup. Check terminal logs for errors.'
+          error: 'Backend process terminated unexpectedly.'
         }, { status: 500 })
       }
       
       await new Promise(resolve => setTimeout(resolve, 500))
     }
-
-    // Final verification
-    if (!startupSuccess) {
-      console.warn('[Backend] Server started but no confirmation message received')
-    }
-
-    console.log('[Backend] ========== BACKEND STARTED SUCCESSFULLY ==========\n')
     
     return NextResponse.json({ 
       success: true, 
       message: 'Backend started successfully',
       pid: backendProcess.pid,
-      port: 8002
+      port: BACKEND_PORT
     })
 
   } catch (error: any) {
-    console.error('[Backend] Unexpected error:', error)
     backendProcess = null
     return NextResponse.json({ 
       success: false, 
-      error: error.message || 'Unexpected error occurred',
-      stack: error.stack
+      error: error.message || 'Unexpected error occurred'
     }, { status: 500 })
   }
 }
@@ -241,31 +239,74 @@ export async function POST() {
 export async function DELETE() {
   try {
     if (backendProcess?.pid) {
-      console.log(`[Backend] Stopping backend PID: ${backendProcess.pid}`)
-      
       if (process.platform === 'win32') {
-        execSync(`taskkill /F /PID ${backendProcess.pid}`, { stdio: 'ignore' })
+        execSync(`taskkill /F /PID ${backendProcess.pid}`, { stdio: 'ignore', timeout: 3000 })
       } else {
-        backendProcess.kill()
+        backendProcess.kill('SIGKILL')
       }
-      
       backendProcess = null
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Backend stopped successfully' 
-      })
+      return NextResponse.json({ success: true, message: 'Backend stopped successfully' })
     }
-    
+    return NextResponse.json({ success: true, message: 'Backend is not running' })
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+export async function GET() {
+  try {
+    let portInUse = false
+    try {
+      if (process.platform === 'win32') {
+        const output = execSync(`netstat -ano | findstr :${BACKEND_PORT}`, { 
+          encoding: 'utf-8',
+          timeout: 3000
+        })
+        portInUse = filterActiveNetstatLines(output).length > 0
+      }
+    } catch {}
+
     return NextResponse.json({ 
-      success: true, 
-      message: 'Backend is not running' 
+      success: true,
+      backendRunning: !!backendProcess?.pid,
+      pid: backendProcess?.pid || null,
+      portInUse,
+      port: BACKEND_PORT
     })
   } catch (error: any) {
-    console.error('[Backend] Error stopping:', error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+}
+
+export async function PATCH() {
+  try {
+    await killExistingBackend()
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    let portStillInUse = false
+    try {
+      if (process.platform === 'win32') {
+        const output = execSync(`netstat -ano | findstr :${BACKEND_PORT}`, { 
+          encoding: 'utf-8',
+          timeout: 3000
+        })
+        portStillInUse = filterActiveNetstatLines(output).length > 0
+      }
+    } catch {}
+
+    if (portStillInUse) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'PORT_STILL_IN_USE',
+        message: `Failed to free port ${BACKEND_PORT}. Run kill-backend.bat manually.`
+      }, { status: 500 })
+    }
+
     return NextResponse.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 })
+      success: true,
+      message: `Port ${BACKEND_PORT} is now available.`
+    })
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }

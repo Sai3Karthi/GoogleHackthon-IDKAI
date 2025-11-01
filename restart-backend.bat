@@ -1,25 +1,28 @@
 @echo off
 echo ====================================
-echo Restarting Backend with New CORS...
+echo Restarting Backend
 echo ====================================
 
 echo.
 echo Step 1: Killing existing backend processes...
-taskkill /F /IM python.exe 2>nul
-if %errorlevel% equ 0 (
-    echo SUCCESS: Killed existing Python processes
-) else (
-    echo No Python processes found
-)
+call kill-backend.bat
 
 echo.
-echo Step 2: Waiting for port to be released...
-timeout /t 2 /nobreak >nul
+echo Step 2: Verifying port 8002 is free...
+netstat -ano | findstr :8002 >nul
+if %errorlevel% equ 0 (
+    echo WARNING: Port 8002 is still in use!
+    echo Please close all Python processes manually or restart your computer.
+    pause
+    exit /b 1
+) else (
+    echo SUCCESS: Port 8002 is available
+)
 
 echo.
 echo Step 3: Starting backend on port 8002...
 cd module3\backend
-start "Backend Server" cmd /k "python main.py"
+start "Backend Server" cmd /k "set PIPELINE_PORT=8002 && set PYTHONIOENCODING=utf-8 && set PYTHONUNBUFFERED=1 && python main.py"
 
 echo.
 echo ====================================

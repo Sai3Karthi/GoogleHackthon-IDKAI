@@ -43,6 +43,9 @@ export function Module3() {
   const [loadingOutputGraph, setLoadingOutputGraph] = useState(false)
   const graphRef = useRef<HTMLDivElement>(null)
   const outputGraphRef = useRef<HTMLDivElement>(null)
+  const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showClusteringDetails, setShowClusteringDetails] = useState(false)
+  const [autoAdvanceTriggered, setAutoAdvanceTriggered] = useState(false)
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -81,19 +84,13 @@ export function Module3() {
     // Try to load from cache
     const cached = loadPerspectivesFromCache(hash)
     if (cached) {
-      console.log('[Module3] Loaded from cache:', cached.perspectives.length, 'perspectives')
-      console.log('[Module3] Cached finalOutput:', {
-        leftist: cached.finalOutput?.leftist?.length || 0,
-        common: cached.finalOutput?.common?.length || 0,
-        rightist: cached.finalOutput?.rightist?.length || 0
-      })
       setPerspectives(cached.perspectives)
       setFinalOutput(cached.finalOutput)
       setIsFromCache(true)
-      setCurrentStep(1) // Show perspectives directly
-      setShowGraph(true) // Ready to show graph
+      setCurrentStep(1)
+      setShowGraph(true)
+      setAutoAdvanceTriggered(true)
     } else {
-      console.log('[Module3] No cache found, ready for generation')
       setIsFromCache(false)
     }
     
@@ -115,45 +112,96 @@ export function Module3() {
 
   // Trigger output graph loading animation when reaching Step 3
   useEffect(() => {
-    // If navigating to Step 3 but finalOutput is not set yet, recalculate from perspectives
-    if (currentStep === 3 && !finalOutput && perspectives.length > 0) {
-      console.log('[Output Graph] Recalculating finalOutput from', perspectives.length, 'perspectives')
-      // Backend uses thresholds: leftist (< 0.428), common (0.428 - 0.571), rightist (>= 0.571)
-      const LEFTIST_THRESHOLD = 0.428
-      const RIGHTIST_THRESHOLD = 0.571
-      const leftist = perspectives.filter((p: Perspective) => p.bias_x < LEFTIST_THRESHOLD)
-      const rightist = perspectives.filter((p: Perspective) => p.bias_x >= RIGHTIST_THRESHOLD)
-      const common = perspectives.filter((p: Perspective) => p.bias_x >= LEFTIST_THRESHOLD && p.bias_x < RIGHTIST_THRESHOLD)
-      
-      const clusteredOutput = { leftist, rightist, common }
-      setFinalOutput(clusteredOutput)
-      console.log(`[Output Graph] Recalculated: ${leftist.length} leftist, ${common.length} common, ${rightist.length} rightist`)
+    const fetchFinalOutputFromBackend = async () => {
+      if (currentStep === 3 && !finalOutput && perspectives.length > 0) {
+        try {
+          const [leftistRes, commonRes, rightistRes] = await Promise.all([
+            fetch('http://localhost:8002/module3/output/leftist'),
+            fetch('http://localhost:8002/module3/output/common'),
+            fetch('http://localhost:8002/module3/output/rightist')
+          ])
+          
+          if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
+            const leftist = await leftistRes.json()
+            const common = await commonRes.json()
+            const rightist = await rightistRes.json()
+            
+            setFinalOutput({
+              leftist: Array.isArray(leftist) ? leftist : [],
+              common: Array.isArray(common) ? common : [],
+              rightist: Array.isArray(rightist) ? rightist : []
+            })
+          } else {
+            const LEFTIST_THRESHOLD = 0.428
+            const RIGHTIST_THRESHOLD = 0.571
+            const leftist = perspectives.filter((p: Perspective) => p.bias_x < LEFTIST_THRESHOLD)
+            const rightist = perspectives.filter((p: Perspective) => p.bias_x >= RIGHTIST_THRESHOLD)
+            const common = perspectives.filter((p: Perspective) => p.bias_x >= LEFTIST_THRESHOLD && p.bias_x < RIGHTIST_THRESHOLD)
+            
+            setFinalOutput({ leftist, rightist, common })
+          }
+        } catch (error) {
+          const LEFTIST_THRESHOLD = 0.428
+          const RIGHTIST_THRESHOLD = 0.571
+          const leftist = perspectives.filter((p: Perspective) => p.bias_x < LEFTIST_THRESHOLD)
+          const rightist = perspectives.filter((p: Perspective) => p.bias_x >= RIGHTIST_THRESHOLD)
+          const common = perspectives.filter((p: Perspective) => p.bias_x >= LEFTIST_THRESHOLD && p.bias_x < RIGHTIST_THRESHOLD)
+          
+          setFinalOutput({ leftist, rightist, common })
+        }
+      }
     }
+
+    fetchFinalOutputFromBackend()
     
     if (currentStep === 3 && finalOutput && !showOutputGraph) {
-      console.log('[Output Graph] Triggering graph with finalOutput:', {
-        leftist: finalOutput.leftist?.length || 0,
-        common: finalOutput.common?.length || 0,
-        rightist: finalOutput.rightist?.length || 0,
-        total: (finalOutput.leftist?.length || 0) + (finalOutput.common?.length || 0) + (finalOutput.rightist?.length || 0)
-      })
-      
       setLoadingOutputGraph(true)
       setShowOutputGraph(false)
       
-      // Show loading for 1.5 seconds, then reveal graph
       setTimeout(() => {
         setLoadingOutputGraph(false)
         setShowOutputGraph(true)
       }, 1500)
     }
     
-    // Reset when leaving step 3
     if (currentStep !== 3 && showOutputGraph) {
       setShowOutputGraph(false)
       setLoadingOutputGraph(false)
     }
   }, [currentStep, finalOutput, showOutputGraph, perspectives])
+
+  useEffect(() => {
+    if (autoAdvanceTimeoutRef.current) {
+      clearTimeout(autoAdvanceTimeoutRef.current)
+      autoAdvanceTimeoutRef.current = null
+    }
+
+    if (currentStep === 2 && perspectives.length > 0 && !autoAdvanceTriggered) {
+      autoAdvanceTimeoutRef.current = setTimeout(() => {
+        setCurrentStep(3)
+        setAutoAdvanceTriggered(true)
+      }, 5000)
+    }
+
+    return () => {
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current)
+        autoAdvanceTimeoutRef.current = null
+      }
+    }
+  }, [currentStep, perspectives.length, autoAdvanceTriggered])
+
+  useEffect(() => {
+    if (currentStep !== 3 && showClusteringDetails) {
+      setShowClusteringDetails(false)
+    }
+  }, [currentStep, showClusteringDetails])
+
+  useEffect(() => {
+    if (currentStep === 3 && !autoAdvanceTriggered && perspectives.length > 0) {
+      setAutoAdvanceTriggered(true)
+    }
+  }, [currentStep, autoAdvanceTriggered, perspectives.length])
 
   const checkBackendStatus = async () => {
     try {
@@ -175,47 +223,47 @@ export function Module3() {
     setStartingBackend(true)
     
     try {
-      // Start the backend
-      const response = await fetch('/api/start-backend', {
-        method: 'POST'
-      })
+      const statusResponse = await fetch('/api/start-backend', { method: 'GET' })
+      const statusResult = await statusResponse.json()
       
+      if (statusResult.portInUse) {
+        const cleanupResponse = await fetch('/api/start-backend', { method: 'PATCH' })
+        const cleanupResult = await cleanupResponse.json()
+        
+        if (!cleanupResult.success) {
+          alert(`Unable to free port automatically.\n\nPlease:\n1. Run kill-backend.bat\n2. Or close Python processes in Task Manager\n3. Then try again.`)
+          setStartingBackend(false)
+          return
+        }
+      }
+      
+      const response = await fetch('/api/start-backend', { method: 'POST' })
       const result = await response.json()
       
       if (result.success) {
-        console.log(`Backend started successfully with PID: ${result.pid}`)
-        
-        // Wait for backend to fully initialize
         await new Promise(resolve => setTimeout(resolve, 6000))
-        
-        // Check backend status
         await checkBackendStatus()
         setStartingBackend(false)
         
-        // Move to step 1 and start generation
         setCurrentStep(1)
         setIsGenerating(true)
         setLoading(true)
-        setPerspectives([])  // Clear old perspectives
-        setFinalOutput(null)  // Clear old clustering data
-        setShowGraph(false)   // Reset graph display
+        setPerspectives([])
+        setFinalOutput(null)
+        setShowGraph(false)
+  setAutoAdvanceTriggered(false)
         
-        // Start the perspective generation pipeline
         await startPerspectiveGeneration()
       } else {
-        console.error("Backend start failed:", result.error)
-        
         if (result.error?.includes('PORT_IN_USE')) {
-          alert(`Port 8002 is already in use!\n\nTo fix this:\n\nOption 1: Kill the existing process\n- Windows: Open Task Manager → Find "python.exe" → End Task\n- Or run: kill-backend.bat\n\nOption 2: Restart your computer\n\nThen try clicking "Start Backend" again.`)
+          alert(`Port still in use.\n\nPlease:\n1. Run kill-backend.bat\n2. Or restart your computer\n\nThen try again.`)
         } else {
-          const cleanError = result.error?.replace('INFO:', '').replace('Started server process', '').trim()
-          alert(`Failed to start backend: ${cleanError}\n\nPlease make sure:\n1. Python is installed\n2. All dependencies are installed (run: pip install -r requirements.txt)\n3. The backend directory exists at module3/backend`)
+          alert(`Failed to start backend.\n\nEnsure:\n1. Python is installed\n2. Dependencies installed: pip install -r requirements.txt\n3. Backend directory exists`)
         }
         setStartingBackend(false)
       }
     } catch (error: any) {
-      console.error("Error starting backend:", error)
-      alert(`Error starting backend: ${error.message}`)
+      alert(`Error: ${error.message}`)
       setStartingBackend(false)
     }
   }
@@ -265,6 +313,7 @@ export function Module3() {
     setIsGenerating(true)
     setLoading(true)
     setPerspectives([])
+    setAutoAdvanceTriggered(false)
 
     try {
       // Setup event listeners BEFORE starting pipeline
@@ -279,8 +328,7 @@ export function Module3() {
         throw new Error('Failed to start pipeline')
       }
       
-      console.log('Pipeline started, waiting for notifications...')
-    } catch (error) {
+          } catch (error) {
       console.error("Error starting pipeline:", error)
       setLoading(false)
       setIsGenerating(false)
@@ -288,8 +336,7 @@ export function Module3() {
   }
 
   const setupEventListeners = () => {
-    console.log('[SSE] Setting up event listeners...')
-    
+        
     // Listen for batch updates via Server-Sent Events
     const batchEventSource = new EventSource('/api/perspective-update')
     
@@ -298,16 +345,14 @@ export function Module3() {
         const data = JSON.parse(event.data)
         
         if (data.type === 'batch') {
-          console.log(`[SSE] New batch: ${data.color} - ${data.count} total perspectives`)
-          
+                    
           // Fetch the actual perspectives from backend (ONLY when notified)
           const response = await fetch("http://localhost:8002/api/output")
           if (response.ok) {
             const outputData = await response.json()
             
             if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
-              console.log(`Fetched ${outputData.perspectives.length} perspectives from backend`)
-              setPerspectives([...outputData.perspectives])
+                            setPerspectives([...outputData.perspectives])
             }
           }
         }
@@ -328,8 +373,7 @@ export function Module3() {
         const data = JSON.parse(event.data)
         
         if (data.type === 'complete') {
-          console.log(`[SSE] Pipeline complete! ${data.total_perspectives} perspectives`)
-          
+                    
           // Close event sources
           batchEventSource.close()
           completeEventSource.close()
@@ -346,29 +390,34 @@ export function Module3() {
               const allPerspectives = finalData.perspectives
               setPerspectives(allPerspectives)
               
-              console.log(`Generated ${allPerspectives.length} perspectives. Moving to graph...`)
-              
-              // Calculate clustering summary from output.json perspectives (NOT final_output/)
-              // Backend uses thresholds: leftist (< 0.428), common (0.428 - 0.571), rightist (>= 0.571)
-              const LEFTIST_THRESHOLD = 0.428
-              const RIGHTIST_THRESHOLD = 0.571
-              const leftist = allPerspectives.filter((p: Perspective) => p.bias_x < LEFTIST_THRESHOLD)
-              const rightist = allPerspectives.filter((p: Perspective) => p.bias_x >= RIGHTIST_THRESHOLD)
-              const common = allPerspectives.filter((p: Perspective) => p.bias_x >= LEFTIST_THRESHOLD && p.bias_x < RIGHTIST_THRESHOLD)
-              
-              const clusteredOutput = { leftist, rightist, common }
-              setFinalOutput(clusteredOutput)
-              console.log(`Clustering: ${leftist.length} leftist, ${common.length} common, ${rightist.length} rightist`)
-              
-              // Save to cache
-              if (currentInputHash) {
-                savePerspectivesToCache(
-                  currentInputHash,
-                  allPerspectives,
-                  clusteredOutput
-                )
-                setIsFromCache(true)
-                console.log('[Module3] Saved to cache')
+              // Fetch clustered output from backend final_output files
+              try {
+                const [leftistRes, commonRes, rightistRes] = await Promise.all([
+                  fetch("http://localhost:8002/module3/output/leftist"),
+                  fetch("http://localhost:8002/module3/output/common"),
+                  fetch("http://localhost:8002/module3/output/rightist")
+                ])
+                
+                if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
+                  const leftist = await leftistRes.json()
+                  const common = await commonRes.json()
+                  const rightist = await rightistRes.json()
+                  
+                  const clusteredOutput = { leftist, common, rightist }
+                  setFinalOutput(clusteredOutput)
+                  
+                  // Save to cache
+                  if (currentInputHash) {
+                    savePerspectivesToCache(
+                      currentInputHash,
+                      allPerspectives,
+                      clusteredOutput
+                    )
+                    setIsFromCache(true)
+                  }
+                }
+              } catch (error) {
+                console.error('Error fetching final output from backend:', error)
               }
               
               // Move to Step 2 (Visualisation) and show graph
@@ -392,8 +441,7 @@ export function Module3() {
       completeEventSource.close()
       setLoading(false)
       setIsGenerating(false)
-      console.log("[SSE] Timeout reached, closing connections")
-    }, 300000)
+          }, 300000)
   }
 
   // Helper to get color for perspective
@@ -501,8 +549,8 @@ export function Module3() {
                       setIsFromCache(false)
                       setCurrentStep(0)
                       setShowGraph(false)
-                      console.log('[Module3] Cache cleared, ready for regeneration')
-                    }
+                      setAutoAdvanceTriggered(false)
+                                          }
                   }}
                   className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
                 >
@@ -682,11 +730,11 @@ export function Module3() {
 
               {/* Animated Graph */}
               {showGraph && perspectives.length > 0 && (
-                <div className="p-6 border border-white/10 rounded">
-                  <div className="text-xs text-white/40 mb-4">Bias × Significance Distribution</div>
+                <div className="p-6 border border-white/15 rounded">
+                  <div className="text-xs text-white/80 font-medium mb-4">Bias × Significance Distribution</div>
                   <div ref={graphRef} className="relative w-full h-96 bg-black/20 rounded border border-white/10">
                     {/* Y-axis */}
-                    <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 text-xs text-white/40">
+                    <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 text-xs text-white/80 font-semibold">
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>1.0</span>
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>0.8</span>
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>0.6</span>
@@ -696,7 +744,7 @@ export function Module3() {
                     </div>
                     
                     {/* X-axis */}
-                    <div className="absolute bottom-0 left-12 right-0 h-8 flex justify-between px-4 text-xs text-white/40 items-center">
+                    <div className="absolute bottom-0 left-12 right-0 h-8 flex justify-between px-4 text-xs text-white/80 font-semibold items-center">
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>0.0</span>
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>0.25</span>
                       <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>0.5</span>
@@ -708,7 +756,7 @@ export function Module3() {
                     <div className="absolute left-12 top-4 right-4 bottom-8 overflow-hidden">
                       {/* X-axis label (bottom) */}
                       <div 
-                        className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-xs text-white/40 opacity-0 animate-fadeIn whitespace-nowrap"
+                        className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-xs text-white/80 font-semibold opacity-0 animate-fadeIn whitespace-nowrap"
                         style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}
                       >
                         Political Bias (Leftist → Rightist)
@@ -718,16 +766,16 @@ export function Module3() {
                     {/* Grid */}
                     <div className="absolute left-12 top-4 right-4 bottom-8">
                       {/* Vertical grid lines */}
-                      <div className="absolute left-0 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0s', animationFillMode: 'forwards' }} />
-                      <div className="absolute left-1/4 top-0 bottom-0 w-px bg-white/5 origin-top animate-drawVertical" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }} />
-                      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }} />
-                      <div className="absolute left-3/4 top-0 bottom-0 w-px bg-white/5 origin-top animate-drawVertical" style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }} />
-                      <div className="absolute right-0 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }} />
+                      <div className="absolute left-0 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0s', animationFillMode: 'forwards' }} />
+                      <div className="absolute left-1/4 top-0 bottom-0 w-px bg-white/15 origin-top animate-drawVertical" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }} />
+                      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }} />
+                      <div className="absolute left-3/4 top-0 bottom-0 w-px bg-white/15 origin-top animate-drawVertical" style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }} />
+                      <div className="absolute right-0 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }} />
                       
                       {/* Horizontal grid lines */}
-                      <div className="absolute top-0 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }} />
-                      <div className="absolute top-1/2 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }} />
-                      <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }} />
+                      <div className="absolute top-0 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }} />
+                      <div className="absolute top-1/2 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }} />
+                      <div className="absolute bottom-0 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }} />
                       
                       {/* Data points */}
                       <div className="relative w-full h-full">
@@ -764,10 +812,10 @@ export function Module3() {
                     </div>
                     
                     {/* Labels */}
-                    <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-xs text-white/40">
+                    <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-xs text-white/80 font-semibold">
                       Bias →
                     </div>
-                    <div className="absolute -left-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-white/40 origin-center">
+                    <div className="absolute -left-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-white/80 font-semibold origin-center">
                       ← Significance
                     </div>
                   </div>
@@ -823,7 +871,15 @@ export function Module3() {
 
           {currentStep === 3 && (
             <div>
-              <h3 className="text-base font-light text-white/70 mb-6">Output</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-base font-light text-white/70">Output</h3>
+                <button
+                  onClick={() => setShowClusteringDetails(true)}
+                  className="px-4 py-2 text-xs text-white/60 hover:text-white/90 border border-white/10 hover:border-white/30 rounded transition-all"
+                >
+                  See what this means →
+                </button>
+              </div>
               {finalOutput ? (
                 <div className="space-y-6">
                   <div className="text-xs text-white/40 mb-4">Three JSON files ready for Module 4</div>
@@ -867,11 +923,11 @@ export function Module3() {
 
                   {/* Clustered Graph */}
                   {showOutputGraph && !loadingOutputGraph && (finalOutput.leftist.length > 0 || finalOutput.common.length > 0 || finalOutput.rightist.length > 0) && (
-                    <div className="p-6 border border-white/10 rounded">
-                      <div className="text-xs text-white/40 mb-4">Clustered Distribution (Leftist • Common • Rightist)</div>
+                    <div className="p-6 border border-white/15 rounded">
+                      <div className="text-xs text-white/80 font-medium mb-4">Clustered Distribution (Leftist • Common • Rightist)</div>
                       <div ref={outputGraphRef} className="relative w-full h-96 bg-black/20 rounded border border-white/10">
                         {/* Y-axis */}
-                        <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 text-xs text-white/40">
+                        <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 text-xs text-white/80 font-semibold">
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>1.0</span>
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>0.8</span>
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>0.6</span>
@@ -881,7 +937,7 @@ export function Module3() {
                         </div>
                         
                         {/* X-axis */}
-                        <div className="absolute bottom-0 left-12 right-0 h-8 flex justify-between px-4 text-xs text-white/40 items-center">
+                        <div className="absolute bottom-0 left-12 right-0 h-8 flex justify-between px-4 text-xs text-white/80 font-semibold items-center">
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>0.0</span>
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>0.25</span>
                           <span className="opacity-0 animate-fadeIn" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>0.5</span>
@@ -893,7 +949,7 @@ export function Module3() {
                         <div className="absolute left-12 top-4 right-4 bottom-8 overflow-hidden">
                           {/* X-axis label */}
                           <div 
-                            className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-xs text-white/40 opacity-0 animate-fadeIn whitespace-nowrap"
+                            className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-xs text-white/80 font-semibold opacity-0 animate-fadeIn whitespace-nowrap"
                             style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}
                           >
                             Political Bias (Leftist → Rightist)
@@ -945,16 +1001,16 @@ export function Module3() {
                         {/* Grid */}
                         <div className="absolute left-12 top-4 right-4 bottom-8">
                           {/* Vertical grid lines */}
-                          <div className="absolute left-0 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0s', animationFillMode: 'forwards' }} />
-                          <div className="absolute left-1/4 top-0 bottom-0 w-px bg-white/5 origin-top animate-drawVertical" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }} />
-                          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }} />
-                          <div className="absolute left-3/4 top-0 bottom-0 w-px bg-white/5 origin-top animate-drawVertical" style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }} />
-                          <div className="absolute right-0 top-0 bottom-0 w-px bg-white/10 origin-top animate-drawVertical" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }} />
+                          <div className="absolute left-0 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0s', animationFillMode: 'forwards' }} />
+                          <div className="absolute left-1/4 top-0 bottom-0 w-px bg-white/15 origin-top animate-drawVertical" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }} />
+                          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }} />
+                          <div className="absolute left-3/4 top-0 bottom-0 w-px bg-white/15 origin-top animate-drawVertical" style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }} />
+                          <div className="absolute right-0 top-0 bottom-0 w-px bg-white/30 origin-top animate-drawVertical" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }} />
                           
                           {/* Horizontal grid lines */}
-                          <div className="absolute top-0 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }} />
-                          <div className="absolute top-1/2 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }} />
-                          <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 origin-left animate-drawHorizontal" style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }} />
+                          <div className="absolute top-0 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }} />
+                          <div className="absolute top-1/2 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }} />
+                          <div className="absolute bottom-0 left-0 right-0 h-px bg-white/30 origin-left animate-drawHorizontal" style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }} />
                           
                           {/* Data points - from all three clusters */}
                           <div className="relative w-full h-full">
@@ -1068,6 +1124,96 @@ export function Module3() {
           )}
         </div>
       </div>
+
+      {showClusteringDetails && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+            onClick={() => setShowClusteringDetails(false)}
+          />
+          <div
+            className="relative w-full max-w-[760px] max-h-[90vh] overflow-y-auto bg-black/90 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-8"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255,255,255,0.2) transparent',
+            }}
+          >
+            <button
+              onClick={() => setShowClusteringDetails(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h2 className="text-2xl font-light text-white mb-6">How We Cluster These Perspectives</h2>
+
+            <div className="space-y-6 text-white/70 leading-relaxed">
+              <section>
+                <p className="text-sm">
+                  The three JSON files shown here are produced by the backend module <code className="text-xs">module3/backend/modules/TOP-N_K_MEANS-CLUSTERING.py</code>. After Module 3 generates all raw perspectives, this script trims and distributes them so that Module 4 only receives the most representative voices.
+                </p>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-light text-white/90 mb-3">1. Categorise Every Perspective</h3>
+                <p className="text-sm">
+                  Each perspective already carries a <code className="text-xs">bias_x</code> value. The script splits them into three pools using the same thresholds you see on the graph:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-2 ml-4">
+                  <li><strong className="text-white/80">Leftist:</strong> bias_x &lt; 0.428</li>
+                  <li><strong className="text-white/80">Common:</strong> 0.428 ≤ bias_x ≤ 0.571</li>
+                  <li><strong className="text-white/80">Rightist:</strong> bias_x &gt; 0.571</li>
+                </ul>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-light text-white/90 mb-3">2. Decide How Many We Keep</h3>
+                <p className="text-sm mb-3">
+                  The script adapts the target size based on how many raw perspectives exist. For example:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-2 ml-4">
+                  <li>7-14 inputs → keep 6</li>
+                  <li>15-28 inputs → keep 14</li>
+                  <li>29-77 inputs → keep 21</li>
+                  <li>78-136 inputs → keep 28</li>
+                </ul>
+                <p className="text-sm">
+                  If there are fewer perspectives than the target, it keeps everything. Otherwise, it works toward that cap.
+                </p>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-light text-white/90 mb-3">3. Allocate Slots Fairly</h3>
+                <p className="text-sm">
+                  It calculates how much of the total each bias pool represents and gives them proportional slots. A rounding pass ensures the slots add up to the exact target count, borrowing from the largest pool when necessary.
+                </p>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-light text-white/90 mb-3">4. Keep the Strongest Voices</h3>
+                <p className="text-sm">
+                  Inside each pool, perspectives are sorted by <code className="text-xs">significance_y</code> (highest first). Only the top entries that fit the allocated slots survive. This guarantees every bias group contributes its most meaningful arguments.
+                </p>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-light text-white/90 mb-3">5. Write the Final Files</h3>
+                <p className="text-sm">
+                  The selected perspectives are saved into <code className="text-xs">final_output/leftist.json</code>, <code className="text-xs">final_output/common.json</code>, and <code className="text-xs">final_output/rightist.json</code>. These are exactly the files displayed in Step 4 and consumed by downstream modules.
+                </p>
+              </section>
+
+              <section className="pt-4 border-t border-white/10">
+                <p className="text-sm">
+                  In short, the clustering pass makes sure you do not just get fewer points; you get the most balanced and high-impact mix of viewpoints available from the raw generation stage.
+                </p>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Methodology Popup */}
       {showMethodology && (

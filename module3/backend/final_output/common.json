@@ -1,20 +1,20 @@
 [
     {
         "color": "green",
-        "bias_x": 0.5538,
-        "significance_y": 0.76,
-        "text": "The focus should be on learning from this tragedy to improve healthcare outcomes for everyone."
+        "bias_x": 0.5385,
+        "significance_y": 0.89,
+        "text": "Let us use the memory of Charles James Kirk to re-evaluate our own priorities and mortality."
     },
     {
         "color": "green",
-        "bias_x": 0.4615,
-        "significance_y": 0.73,
-        "text": "The media coverage of Kirk's death should focus on providing accurate information and avoiding sensationalism."
+        "bias_x": 0.4769,
+        "significance_y": 0.84,
+        "text": "A moment of silence in honor of Charles James Kirk seems appropriate given his community impact."
     },
     {
         "color": "green",
-        "bias_x": 0.5077,
-        "significance_y": 0.7,
-        "text": "The narrative could be used to promote responsible health behaviors and encourage regular medical check-ups."
+        "bias_x": 0.5692,
+        "significance_y": 0.79,
+        "text": "The dates provide a framework for contextualizing his life and its eventual conclusion."
     }
 ]
