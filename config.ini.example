@@ -7,6 +7,12 @@
 host = 127.0.0.1
 port = 8000
 
+[module1]
+# Host IP or domain for Module1 backend (Link Verification)
+# Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
+host = 127.0.0.1
+port = 8001
+
 [module3]
 # Host IP or domain for Module3 backend (Perspective Generation)
 # Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name

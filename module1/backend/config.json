@@ -1,0 +1,27 @@
+{
+  "scam_keywords": [
+    "urgent", "act now", "limited time", "guaranteed", "risk-free",
+    "once in a lifetime", "cancel anytime", "no credit check",
+    "click here now", "congratulations", "you've won", "claim now",
+    "free money", "double your", "work from home", "be your own boss",
+    "bitcoin", "cryptocurrency investment", "forex trading", "quick cash",
+    "nigerian prince", "inheritance", "tax refund", "irs", "suspended account",
+    "verify your account", "update payment", "unusual activity", "confirm identity"
+  ],
+  "suspicious_tlds": [
+    ".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top", ".work", ".date", ".racing"
+  ],
+  "trusted_indicators": [
+    "privacy policy", "terms of service", "contact us", "about us",
+    "customer service", "refund policy", "shipping policy"
+  ],
+  "gambling_keywords": [
+    "casino", "slots", "poker", "betting", "lottery", "jackpot",
+    "roulette", "blackjack", "gamble", "wager"
+  ],
+  "phishing_patterns": [
+    "verify.*account", "suspend.*account", "unusual.*activity",
+    "confirm.*identity", "update.*payment", "security.*alert",
+    "click.*here.*now", "act.*immediately"
+  ]
+}

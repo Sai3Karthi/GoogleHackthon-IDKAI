@@ -1,0 +1,74 @@
+[
+    {
+        "color": "red",
+        "bias_x": 0.0,
+        "significance_y": 0.8,
+        "text": "This is a necessary challenge to the government's inaction on a crisis that is killing its citizens."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0152,
+        "significance_y": 0.8,
+        "text": "The offer of cooperation is a sign of mature politics, but it should not be mistaken for endorsement of the government's policies."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0455,
+        "significance_y": 0.8,
+        "text": "This is a public health emergency that requires immediate and decisive action."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0758,
+        "significance_y": 0.8,
+        "text": "The opposition's engagement is crucial to ensure that the issue remains in the public eye."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.1061,
+        "significance_y": 0.8,
+        "text": "The opposition's support is contingent on the government taking meaningful action."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.1364,
+        "significance_y": 0.8,
+        "text": "The opposition's engagement is a positive step towards forcing the government to act."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1439,
+        "significance_y": 0.8,
+        "text": "This is a crucial step in forcing the government to acknowledge the severity of the public health crisis."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1591,
+        "significance_y": 0.8,
+        "text": "The call for transparency in pollution data and reporting is a valid and important demand."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1818,
+        "significance_y": 0.8,
+        "text": "The government should seize this opportunity to demonstrate its commitment to public health and environmental protection."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2045,
+        "significance_y": 0.8,
+        "text": "The government must respond with concrete actions, not just political rhetoric."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2273,
+        "significance_y": 0.8,
+        "text": "The opposition's engagement could galvanize public support for environmental activism."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.25,
+        "significance_y": 0.8,
+        "text": "This could be a turning point in the fight against air pollution in India."
+    }
+]
