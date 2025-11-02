@@ -45,6 +45,7 @@ import requests
 # Load environment variables from root .env file
 try:
     import sys
+    # module3/backend/main_modules/api_request.py -> root
     root = Path(__file__).parent.parent.parent.parent
     sys.path.insert(0, str(root))
     from utils.env_loader import load_env_file
@@ -55,7 +56,8 @@ except (ImportError, ValueError):
     # Fallback to dotenv
     try:
         from dotenv import load_dotenv
-        env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+        # module3/backend/main_modules -> root
+        env_path = Path(__file__).parent.parent.parent / '.env'
         load_dotenv(env_path)
     except Exception:
         pass

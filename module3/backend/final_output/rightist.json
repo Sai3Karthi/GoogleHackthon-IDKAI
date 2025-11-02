@@ -1,74 +1,74 @@
 [
     {
         "color": "blue",
-        "bias_x": 0.5758,
-        "significance_y": 0.8,
-        "text": "This could lead to a more coordinated and effective strategy for managing cross-border pollution sources."
-    },
-    {
-        "color": "blue",
-        "bias_x": 0.6212,
-        "significance_y": 0.8,
-        "text": "The opposition's offer of support is a positive step towards a more unified approach to national challenges."
-    },
-    {
-        "color": "blue",
         "bias_x": 0.6515,
-        "significance_y": 0.8,
-        "text": "This is a welcome demonstration of mature and responsible opposition politics."
+        "significance_y": 0.9,
+        "text": "This is a welcome demonstration of political maturity and a commitment to national interest above partisan politics."
     },
     {
         "color": "blue",
-        "bias_x": 0.6818,
-        "significance_y": 0.8,
-        "text": "This is a crucial opportunity for all political parties to work together for the betterment of the nation."
+        "bias_x": 0.6894,
+        "significance_y": 0.9,
+        "text": "The opposition's offer of support is a constructive move that should be met with a positive response from the government."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.8864,
+        "significance_y": 0.9,
+        "text": "The government's long-term vision for sustainable development is the only answer to this complex problem, not piecemeal political gestures."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9394,
+        "significance_y": 0.9,
+        "text": "This is a prime example of the opposition's politics of negativity and obstructionism."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9773,
+        "significance_y": 0.9,
+        "text": "The government's comprehensive long-term strategy is the only way to address the smog crisis, not opposition grandstanding."
     },
     {
         "color": "blue",
-        "bias_x": 0.7121,
+        "bias_x": 0.5758,
+        "significance_y": 0.84,
+        "text": "The government's indifference to the 'filthy smog' is a direct threat to the lives of millions of Delhi residents."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6667,
         "significance_y": 0.8,
-        "text": "This is a commendable offer of support that should be welcomed by the government."
+        "text": "This is a moment where all political parties should put aside their differences and work together for the common good."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.7045,
+        "significance_y": 0.8,
+        "text": "The opposition's call for action on the smog is a legitimate concern that deserves a serious and cooperative response."
     },
     {
         "color": "indigo",
         "bias_x": 0.7197,
         "significance_y": 0.8,
-        "text": "This is a welcome sign of maturity from the opposition, acknowledging that environmental issues transcend political boundaries."
+        "text": "The opposition is using a public health crisis as a political football to score points against the government."
     },
     {
         "color": "indigo",
         "bias_x": 0.75,
         "significance_y": 0.8,
-        "text": "This initiative could foster a more collaborative relationship between the center and state governments on environmental issues."
+        "text": "The government should be wary of accepting offers of 'cooperation' from those who are actively trying to destabilize it."
     },
     {
         "color": "indigo",
         "bias_x": 0.7803,
         "significance_y": 0.8,
-        "text": "The opposition's statement is a call for a unified front against a common enemy: the polluted air we all breathe."
+        "text": "The opposition's 'support' is likely a veiled attempt to take credit if the problem is solved."
     },
     {
         "color": "indigo",
         "bias_x": 0.8106,
         "significance_y": 0.8,
-        "text": "The opposition's call for cooperation is a sign of a mature and responsible political opposition."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.8409,
-        "significance_y": 0.8,
-        "text": "The opposition's call for unity against pollution is a patriotic stance that deserves commendation."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.8636,
-        "significance_y": 0.8,
-        "text": "The opposition's 'support' is a thinly veiled attempt to take credit for the government's successful anti-pollution initiatives."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.8939,
-        "significance_y": 0.8,
-        "text": "This is a transparent attempt to exploit a public crisis for political gain."
+        "text": "The opposition's offer is a disingenuous attempt to capitalize on a national crisis."
     }
 ]

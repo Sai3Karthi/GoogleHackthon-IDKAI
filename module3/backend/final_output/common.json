@@ -1,26 +1,26 @@
 [
     {
         "color": "green",
-        "bias_x": 0.4621,
-        "significance_y": 0.85,
-        "text": "A bipartisan approach to environmental challenges is the only way to ensure a sustainable future for all."
+        "bias_x": 0.4318,
+        "significance_y": 0.8,
+        "text": "The offer of cooperation is a positive step that could lead to a more unified and effective approach to tackling pollution."
     },
     {
         "color": "green",
-        "bias_x": 0.4318,
+        "bias_x": 0.4621,
         "significance_y": 0.8,
-        "text": "This is a welcome step towards a more cooperative and issue-based political discourse in India."
+        "text": "The government should seize this opportunity to demonstrate its commitment to environmental protection and public health."
     },
     {
         "color": "green",
         "bias_x": 0.4924,
         "significance_y": 0.8,
-        "text": "The focus on cooperation shows a maturity that is often lacking in Indian politics."
+        "text": "The government's response to this offer will be a key indicator of its willingness to engage in constructive politics."
     },
     {
         "color": "green",
         "bias_x": 0.5227,
         "significance_y": 0.8,
-        "text": "The opposition's support for policy initiatives is a welcome sign of their commitment to national progress."
+        "text": "The government should take this as a serious proposal for partnership in addressing a critical public health crisis."
     }
 ]

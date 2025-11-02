@@ -8,11 +8,14 @@ import json
 from typing import Dict, Any, List
 import logging
 from urllib.parse import urlparse
+from pathlib import Path
 import httpx
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load from root .env
+root_env = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(root_env)
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +88,7 @@ async def check_web_risk(url: str) -> Dict[str, Any]:
 
 async def gemini_analyze_content(text: str, url: str = None) -> Dict[str, Any]:
     """
-    Use Gemini 1.5 Flash for AI-powered content analysis.
+    Use Gemini 2.5 Flash for AI-powered content analysis.
     Returns context-aware threat assessment.
     """
     if not GEMINI_API_KEY:
@@ -138,6 +141,85 @@ Respond ONLY with valid JSON, no markdown formatting."""
         return None
     except Exception as e:
         logger.error(f"Gemini analysis failed: {e}")
+        return None
+
+
+async def gemini_analyze_image(
+    image_data: str,
+    mime_type: str,
+    context_text: str = None,
+    url: str = None
+) -> Dict[str, Any]:
+    """
+    Use Gemini 2.5 Flash Vision for multimodal image analysis.
+    Detects scam patterns in images: fake screenshots, QR codes, manipulated images.
+    """
+    if not GEMINI_API_KEY:
+        logger.warning("Gemini API key not configured, skipping image analysis")
+        return None
+    
+    try:
+        prompt = """Analyze this image for potential scams, fraud, or malicious content.
+
+Look for:
+1. Fake payment confirmations or bank transfer screenshots
+2. Manipulated/photoshopped images (fake celebrity endorsements, edited IDs)
+3. Phishing QR codes or fake payment QR codes
+4. Screenshots of fake WhatsApp/Telegram messages (romance scams, investment scams)
+5. Misleading graphs/charts for investment schemes
+6. Fake product images or deepfake photos
+7. Screenshots of fake apps or phishing websites
+8. Fake government documents or certificates
+9. Lottery/prize notification graphics
+10. Fake trading platform screenshots
+
+Also extract any text visible in the image (OCR) and analyze it for scam language.
+
+Provide a JSON response with:
+1. risk_level: "safe", "suspicious", or "dangerous"
+2. confidence: float between 0 and 1
+3. threats: array of specific visual threats detected
+4. explanation: brief user-friendly explanation
+5. reasoning: detailed analysis of visual elements
+6. extracted_text: any text found in the image (OCR)
+7. visual_elements: list of suspicious visual elements detected
+
+Respond ONLY with valid JSON, no markdown formatting."""
+        
+        if context_text:
+            prompt += f"\n\nAdditional context provided by user: {context_text[:500]}"
+        if url:
+            prompt += f"\n\nSource URL: {url}"
+        
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        image_part = {
+            "mime_type": mime_type,
+            "data": image_data
+        }
+        
+        response = model.generate_content([prompt, image_part])
+        
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        result = json.loads(response_text)
+        
+        logger.info(f"Gemini image analysis complete: {result.get('risk_level')} (confidence: {result.get('confidence')})")
+        return result
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Gemini image response as JSON: {e}")
+        logger.error(f"Raw response: {response.text[:500]}")
+        return None
+    except Exception as e:
+        logger.error(f"Gemini image analysis failed: {e}")
         return None
 
 

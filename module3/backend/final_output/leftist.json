@@ -3,72 +3,72 @@
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "This is a necessary challenge to the government's inaction on a crisis that is killing its citizens."
+        "text": "This is a desperate plea from a responsible opposition leader facing a government that has failed its citizens on the most basic level."
     },
     {
         "color": "red",
-        "bias_x": 0.0152,
+        "bias_x": 0.0303,
         "significance_y": 0.8,
-        "text": "The offer of cooperation is a sign of mature politics, but it should not be mistaken for endorsement of the government's policies."
+        "text": "The 'filthy smog' is a direct consequence of the government's pro-industry policies that disregard environmental impact."
     },
     {
         "color": "red",
-        "bias_x": 0.0455,
+        "bias_x": 0.0606,
         "significance_y": 0.8,
-        "text": "This is a public health emergency that requires immediate and decisive action."
+        "text": "The government's silence on this issue will be deafening, further highlighting its indifference to public health."
     },
     {
         "color": "red",
-        "bias_x": 0.0758,
+        "bias_x": 0.0909,
         "significance_y": 0.8,
-        "text": "The opposition's engagement is crucial to ensure that the issue remains in the public eye."
+        "text": "The government's failure to address the smog is a direct assault on the health and well-being of millions."
     },
     {
         "color": "red",
-        "bias_x": 0.1061,
+        "bias_x": 0.1212,
         "significance_y": 0.8,
-        "text": "The opposition's support is contingent on the government taking meaningful action."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.1364,
-        "significance_y": 0.8,
-        "text": "The opposition's engagement is a positive step towards forcing the government to act."
+        "text": "This is a moral imperative for the government, not just a political suggestion."
     },
     {
         "color": "orange",
         "bias_x": 0.1439,
         "significance_y": 0.8,
-        "text": "This is a crucial step in forcing the government to acknowledge the severity of the public health crisis."
+        "text": "The opposition's cooperative tone, while welcome, should not be misconstrued as a lack of accountability for the government's failures."
     },
     {
-        "color": "orange",
-        "bias_x": 0.1591,
+        "color": "yellow",
+        "bias_x": 0.2879,
         "significance_y": 0.8,
-        "text": "The call for transparency in pollution data and reporting is a valid and important demand."
+        "text": "The political posturing around the smog is less important than the scientific solutions that are needed."
     },
     {
-        "color": "orange",
-        "bias_x": 0.1818,
+        "color": "yellow",
+        "bias_x": 0.3182,
         "significance_y": 0.8,
-        "text": "The government should seize this opportunity to demonstrate its commitment to public health and environmental protection."
+        "text": "The focus should be on the practical steps that can be taken to mitigate the air pollution."
     },
     {
-        "color": "orange",
-        "bias_x": 0.2045,
+        "color": "yellow",
+        "bias_x": 0.3485,
         "significance_y": 0.8,
-        "text": "The government must respond with concrete actions, not just political rhetoric."
+        "text": "Cooperation between the ruling and opposition parties is essential for tackling a crisis of this magnitude."
     },
     {
-        "color": "orange",
-        "bias_x": 0.2273,
+        "color": "yellow",
+        "bias_x": 0.3788,
         "significance_y": 0.8,
-        "text": "The opposition's engagement could galvanize public support for environmental activism."
+        "text": "The offer of support is a positive step, but it must be followed by genuine collaboration on the ground."
     },
     {
-        "color": "orange",
-        "bias_x": 0.25,
+        "color": "yellow",
+        "bias_x": 0.4091,
         "significance_y": 0.8,
-        "text": "This could be a turning point in the fight against air pollution in India."
+        "text": "The issue of air pollution transcends party politics and requires a united front to address it."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0152,
+        "significance_y": 0.7,
+        "text": "This highlights the critical gap between political rhetoric and concrete action when it comes to environmental crises."
     }
 ]

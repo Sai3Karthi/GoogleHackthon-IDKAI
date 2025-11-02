@@ -46,8 +46,14 @@ from typing import Optional, List, Dict, Any
 import json
 
 from scraper import scrape_url, detect_input_type
-from analyzer import analyze_content, quick_url_check
+from analyzer import analyze_content, quick_url_check, gemini_analyze_image
 from validators import validate_url_safety
+from image_utils import (
+    validate_and_process_image_url,
+    process_image_bytes,
+    validate_base64_image,
+    get_image_mime_type
+)
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 with open(CONFIG_PATH, "r") as f:
@@ -99,6 +105,24 @@ class AnalyzeRequest(BaseModel):
             raise ValueError('Input cannot be empty')
         return v.strip()
 
+class AnalyzeImageRequest(BaseModel):
+    image: str
+    image_type: str = "base64"
+    context_text: Optional[str] = None
+    url: Optional[str] = None
+    
+    @validator('image')
+    def image_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Image data cannot be empty')
+        return v.strip()
+    
+    @validator('image_type')
+    def valid_image_type(cls, v):
+        if v not in ["base64", "url"]:
+            raise ValueError('image_type must be "base64" or "url"')
+        return v
+
 class AnalysisResult(BaseModel):
     input_type: str
     risk_level: str
@@ -108,6 +132,7 @@ class AnalysisResult(BaseModel):
     recommendation: str
     scraped_content: Optional[Dict[str, str]] = None
     ai_powered: Optional[bool] = False
+    image_info: Optional[Dict[str, Any]] = None
 
 @app.get("/api/health")
 async def health_check():
@@ -194,8 +219,88 @@ async def get_status():
     return {
         "status": "ready",
         "service": "module1",
-        "endpoints": ["/api/health", "/api/analyze", "/api/status"]
+        "endpoints": ["/api/health", "/api/analyze", "/api/analyze-image", "/api/status"],
+        "features": {
+            "text_analysis": True,
+            "url_analysis": True,
+            "image_analysis": True,
+            "gemini_ai": bool(os.getenv("GEMINI_API_KEY")),
+            "multimodal": True
+        }
     }
+
+@app.post("/api/analyze-image", response_model=AnalysisResult)
+async def analyze_image(request: AnalyzeImageRequest):
+    """
+    Analyze image for scam/fraud patterns using Gemini Vision.
+    Supports base64 encoded images or image URLs.
+    Optimized for serverless deployment (max 4MB).
+    """
+    try:
+        if request.image_type == "url":
+            processed = await validate_and_process_image_url(request.image)
+            if not processed["success"]:
+                raise HTTPException(status_code=400, detail=processed["error"])
+            
+            image_data = processed["base64_data"]
+            mime_type = get_image_mime_type(processed["format"])
+            image_info = {
+                "format": processed["format"],
+                "size_kb": round(processed["size"] / 1024, 2),
+                "dimensions": processed["dimensions"],
+                "source": "url"
+            }
+        else:
+            validation = validate_base64_image(request.image)
+            if not validation["valid"]:
+                raise HTTPException(status_code=400, detail=validation["error"])
+            
+            image_data = request.image
+            if ',' in image_data:
+                image_data = image_data.split(',', 1)[1]
+            
+            mime_type = get_image_mime_type(validation["format"])
+            image_info = {
+                "format": validation["format"],
+                "size_kb": round(validation["size"] / 1024, 2),
+                "dimensions": validation["dimensions"],
+                "source": "upload"
+            }
+        
+        analysis = await gemini_analyze_image(
+            image_data,
+            mime_type,
+            request.context_text,
+            request.url
+        )
+        
+        if not analysis:
+            raise HTTPException(
+                status_code=503,
+                detail="AI image analysis unavailable. Please check API configuration."
+            )
+        
+        return AnalysisResult(
+            input_type="image",
+            risk_level=analysis["risk_level"],
+            confidence=analysis["confidence"],
+            threats=analysis["threats"],
+            analysis={
+                "visual_elements": analysis.get("visual_elements", []),
+                "extracted_text": analysis.get("extracted_text", ""),
+                "ai_reasoning": analysis.get("reasoning", "")
+            },
+            recommendation=analysis["explanation"],
+            scraped_content=None,
+            ai_powered=True,
+            image_info=image_info
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Image analysis failed: {str(e)}")
 
 @app.get("/api/input")
 async def get_input():
