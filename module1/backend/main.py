@@ -107,6 +107,7 @@ class AnalysisResult(BaseModel):
     analysis: Dict[str, Any]
     recommendation: str
     scraped_content: Optional[Dict[str, str]] = None
+    ai_powered: Optional[bool] = False
 
 @app.get("/api/health")
 async def health_check():
@@ -150,12 +151,13 @@ async def analyze_input(request: AnalyzeRequest):
                     risk_level=analysis["risk_level"],
                     confidence=analysis["confidence"],
                     threats=analysis["threats"],
-                    analysis=analysis["details"],
+                    analysis=analysis.get("details", {}),
                     recommendation=analysis["recommendation"],
                     scraped_content={
                         "title": scraped["title"],
                         "text": scraped["text"][:500] + "..." if len(scraped["text"]) > 500 else scraped["text"]
-                    }
+                    },
+                    ai_powered=analysis.get("ai_powered", False)
                 )
             else:
                 url_analysis = await validate_url_safety(input_text, SCAM_CONFIG)
@@ -177,9 +179,10 @@ async def analyze_input(request: AnalyzeRequest):
                 risk_level=analysis["risk_level"],
                 confidence=analysis["confidence"],
                 threats=analysis["threats"],
-                analysis=analysis["details"],
+                analysis=analysis.get("details", {}),
                 recommendation=analysis["recommendation"],
-                scraped_content=None
+                scraped_content=None,
+                ai_powered=analysis.get("ai_powered", False)
             )
     
     except Exception as e:

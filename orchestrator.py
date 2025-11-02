@@ -9,6 +9,11 @@ config = get_config()
 
 # Module registry
 MODULES = {
+    "module1": {
+        "host": config.get_module1_host(),
+        "port": config.get_module1_port(),
+        "description": "Link Verification & Scam Detection API"
+    },
     "module3": {
         "host": config.get_module3_host(),
         "port": config.get_module3_port(),
@@ -145,7 +150,7 @@ if __name__ == "__main__":
     print(f"\nRegistered modules:")
     for name, mod_config in MODULES.items():
         print(f"  - {name}: {mod_config['host']}:{mod_config['port']} - {mod_config['description']}")
-    print(f"\n⚠️  Start each module manually before use!")
+    print(f"\n  Start each module manually before use!")
     print("=" * 70)
     
     uvicorn.run(

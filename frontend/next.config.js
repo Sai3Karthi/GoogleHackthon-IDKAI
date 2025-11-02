@@ -15,6 +15,10 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: '/module1/:path*',
+        destination: `${orchestratorUrl}/module1/:path*`,
+      },
+      {
         source: '/module3/:path*',
         destination: `${orchestratorUrl}/module3/:path*`,
       },

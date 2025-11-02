@@ -1,12 +1,27 @@
 """
-Content analysis and threat detection logic.
+Content analysis and threat detection using Google AI (Gemini + Web Risk).
+Enhanced with Gemini 1.5 Flash for context-aware scam detection.
 """
 import re
+import os
+import json
 from typing import Dict, Any, List
 import logging
 from urllib.parse import urlparse
+import httpx
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    logger.info("Gemini API configured successfully")
+else:
+    logger.warning("GEMINI_API_KEY not found - AI analysis will be disabled")
 
 async def quick_url_check(url: str) -> Dict[str, Any]:
     """
@@ -36,6 +51,96 @@ async def quick_url_check(url: str) -> Dict[str, Any]:
         "scheme": parsed.scheme
     }
 
+async def check_web_risk(url: str) -> Dict[str, Any]:
+    """
+    Check URL against Google Web Risk API.
+    Uses public lookup API for quick threat detection.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                "https://webrisk.googleapis.com/v1/uris:search",
+                params={
+                    "uri": url,
+                    "threatTypes": ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"],
+                    "key": GEMINI_API_KEY
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "threat" in data:
+                    return {
+                        "is_malicious": True,
+                        "threats": data["threat"].get("threatTypes", []),
+                        "source": "google_web_risk"
+                    }
+            
+            return {"is_malicious": False, "threats": [], "source": "google_web_risk"}
+    
+    except Exception as e:
+        logger.warning(f"Web Risk API check failed: {e}")
+        return {"is_malicious": False, "threats": [], "error": str(e)}
+
+
+async def gemini_analyze_content(text: str, url: str = None) -> Dict[str, Any]:
+    """
+    Use Gemini 1.5 Flash for AI-powered content analysis.
+    Returns context-aware threat assessment.
+    """
+    if not GEMINI_API_KEY:
+        logger.warning("Gemini API key not configured, skipping AI analysis")
+        return None
+    
+    try:
+        prompt = f"""Analyze this content for potential scams, phishing, fraud, or malicious intent.
+
+Content: {text[:3000]}
+URL: {url if url else "N/A"}
+
+Provide a JSON response with:
+1. risk_level: "safe", "suspicious", or "dangerous"
+2. confidence: float between 0 and 1
+3. threats: array of specific threat types detected
+4. explanation: brief user-friendly explanation (1-2 sentences)
+5. reasoning: detailed analysis of why this is flagged
+
+Focus on:
+- Financial scams (crypto, investment fraud, get-rich-quick schemes)
+- Phishing attempts (credential theft, fake login pages)
+- Social engineering (urgency tactics, fear-based manipulation)
+- Misinformation and fake news patterns
+- Gambling/betting operations
+- Malicious software distribution
+
+Respond ONLY with valid JSON, no markdown formatting."""
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        result = json.loads(response_text)
+        
+        logger.info(f"Gemini analysis complete: {result.get('risk_level')} (confidence: {result.get('confidence')})")
+        return result
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Gemini response as JSON: {e}")
+        logger.error(f"Raw response: {response.text[:500]}")
+        return None
+    except Exception as e:
+        logger.error(f"Gemini analysis failed: {e}")
+        return None
+
+
 async def analyze_content(
     title: str,
     text: str,
@@ -43,11 +148,67 @@ async def analyze_content(
     config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Analyze content for scam indicators, phishing patterns, etc.
+    Enhanced content analysis combining Google AI with traditional patterns.
+    Priority: Web Risk > Gemini AI > Keyword matching
     """
     threats = []
     red_flags = []
     confidence_score = 0.0
+    ai_explanation = None
+    ai_reasoning = None
+    
+    if url:
+        web_risk_result = await check_web_risk(url)
+        if web_risk_result["is_malicious"]:
+            return {
+                "risk_level": "dangerous",
+                "confidence": 0.95,
+                "threats": ["google_web_risk_flagged"] + web_risk_result["threats"],
+                "recommendation": "BLOCKED: This URL is flagged by Google Web Risk as malicious. Do not visit this site.",
+                "details": {
+                    "red_flags": ["Flagged by Google Safe Browsing database"],
+                    "source": "google_web_risk",
+                    "threat_types": web_risk_result["threats"]
+                },
+                "ai_powered": True
+            }
+    
+    gemini_result = await gemini_analyze_content(f"{title} {text}", url)
+    
+    if gemini_result:
+        ai_explanation = gemini_result.get("explanation", "")
+        ai_reasoning = gemini_result.get("reasoning", "")
+        
+        gemini_risk = gemini_result.get("risk_level", "safe")
+        gemini_confidence = float(gemini_result.get("confidence", 0.5))
+        gemini_threats = gemini_result.get("threats", [])
+        
+        threats.extend(gemini_threats)
+        confidence_score = gemini_confidence
+        
+        if gemini_risk == "dangerous":
+            risk_level = "dangerous"
+            recommendation = ai_explanation or "HIGH RISK: AI analysis detected multiple threat indicators."
+        elif gemini_risk == "suspicious":
+            risk_level = "suspicious"
+            recommendation = ai_explanation or "CAUTION: AI detected potential warning signs."
+        else:
+            risk_level = "safe"
+            recommendation = ai_explanation or "Content appears safe based on AI analysis."
+        
+        return {
+            "risk_level": risk_level,
+            "confidence": round(confidence_score, 2),
+            "threats": threats,
+            "recommendation": recommendation,
+            "details": {
+                "red_flags": [ai_reasoning] if ai_reasoning else [],
+                "ai_explanation": ai_explanation,
+                "ai_reasoning": ai_reasoning,
+                "text_length": len(text)
+            },
+            "ai_powered": True
+        }
     
     combined_text = f"{title} {text}".lower()
     
@@ -78,14 +239,13 @@ async def analyze_content(
     
     trust_score = sum(1 for indicator in config["trusted_indicators"] if indicator in combined_text)
     if trust_score == 0:
-        red_flags.append("No trust indicators found (privacy policy, contact info, etc.)")
+        red_flags.append("No trust indicators found")
         confidence_score += 0.1
     else:
         confidence_score -= 0.1 * trust_score
     
     if url:
         parsed = urlparse(url)
-        
         for tld in config["suspicious_tlds"]:
             if parsed.netloc.endswith(tld):
                 threats.append("suspicious_domain")
@@ -102,13 +262,13 @@ async def analyze_content(
     
     if confidence_score >= 0.6 or len(threats) >= 3:
         risk_level = "dangerous"
-        recommendation = "HIGH RISK: This content shows multiple red flags. Avoid engaging with this site/information."
+        recommendation = "HIGH RISK: Multiple threat indicators detected."
     elif confidence_score >= 0.3 or len(threats) >= 1:
         risk_level = "suspicious"
-        recommendation = "CAUTION: This content shows some warning signs. Proceed with extreme caution and verify information independently."
+        recommendation = "CAUTION: Some warning signs detected."
     else:
         risk_level = "safe"
-        recommendation = "This content appears relatively safe, but always exercise caution online."
+        recommendation = "Content appears relatively safe."
     
     return {
         "risk_level": risk_level,
@@ -121,5 +281,6 @@ async def analyze_content(
             "phishing_patterns_found": phishing_matches,
             "trust_indicators_found": trust_score,
             "text_length": len(text)
-        }
+        },
+        "ai_powered": False
     }
