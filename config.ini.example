@@ -1,0 +1,46 @@
+# Configuration Template for IDK-AI Application
+# Copy this file to config.ini and adjust values for your deployment
+
+[orchestrator]
+# Host IP or domain for orchestrator (API Gateway)
+# Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
+host = 127.0.0.1
+port = 8000
+
+[module3]
+# Host IP or domain for Module3 backend (Perspective Generation)
+# Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
+host = 127.0.0.1
+port = 8002
+
+[frontend]
+# Host IP or domain for Next.js frontend
+# Use localhost for local dev, 0.0.0.0 for all interfaces, or domain name
+host = localhost
+port = 3000
+
+# Production Example:
+# [orchestrator]
+# host = api.yourdomain.com
+# port = 443
+#
+# [module3]
+# host = module3.yourdomain.com
+# port = 443
+#
+# [frontend]
+# host = yourdomain.com
+# port = 443
+
+# Docker Example:
+# [orchestrator]
+# host = orchestrator
+# port = 8000
+#
+# [module3]
+# host = module3-backend
+# port = 8002
+#
+# [frontend]
+# host = frontend
+# port = 3000

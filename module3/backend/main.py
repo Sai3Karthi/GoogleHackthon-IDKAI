@@ -59,6 +59,15 @@ except (ImportError, ValueError):
 sys.path.append(os.path.join(os.path.dirname(__file__), 'main_modules'))
 from main_modules import api_request
 
+# Load configuration
+try:
+    from config_loader import get_config
+    config = get_config()
+    logger.info("Configuration loaded successfully")
+except Exception as e:
+    logger.warning(f"Could not load config: {e}. Using defaults.")
+    config = None
+
 # Event to signal server shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -161,14 +170,29 @@ app = FastAPI(
 )
 
 # Add CORS middleware to allow frontend access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# Build allowed origins from config
+allowed_origins = []
+if config:
+    frontend_url = config.get_frontend_url()
+    allowed_origins.append(frontend_url)
+    # Also add localhost variants for development
+    frontend_port = config.get_frontend_port()
+    allowed_origins.extend([
+        f"http://localhost:{frontend_port}",
+        f"http://127.0.0.1:{frontend_port}"
+    ])
+else:
+    # Fallback origins if config not available
+    allowed_origins = [
         "http://localhost:3000", 
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001"
-    ],
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -410,16 +434,22 @@ async def get_module3_output(category: str) -> JSONResponse:
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(os.getenv("PIPELINE_PORT", 8002))
+    # Get port from config, fallback to env variable, then default
+    if config:
+        host = config.get_module3_host()
+        port = config.get_module3_port()
+    else:
+        host = "127.0.0.1"
+        port = int(os.getenv("PIPELINE_PORT", 8002))
     
     # When running directly, the lifespan will handle the pipeline execution
     # Just start the server
-    logger.info(f"Starting Module3 server on port {port}")
+    logger.info(f"Starting Module3 server on {host}:{port}")
     logger.info("Pipeline will run automatically on server startup via lifespan hook")
     
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host=host,
         port=port,
         log_level="info"
     )

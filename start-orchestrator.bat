@@ -1,3 +1,0 @@
-@echo off
-echo Starting Orchestrator...
-python orchestrator.py

@@ -2,11 +2,16 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 import httpx
 import json
+from config_loader import get_config
+
+# Load configuration
+config = get_config()
 
 # Module registry
 MODULES = {
     "module3": {
-        "port": 8002,
+        "host": config.get_module3_host(),
+        "port": config.get_module3_port(),
         "description": "Perspective Generation API"
     }
 }
@@ -24,10 +29,11 @@ async def root():
         "version": "1.0.0",
         "modules": {
             name: {
-                "port": config["port"],
-                "description": config["description"]
+                "host": mod_config["host"],
+                "port": mod_config["port"],
+                "description": mod_config["description"]
             }
-            for name, config in MODULES.items()
+            for name, mod_config in MODULES.items()
         }
     }
 
@@ -47,12 +53,12 @@ async def run_module(module_name: str):
             content={"success": False, "error": f"Unknown module '{module_name}'"}
         )
     
-    config = MODULES[module_name]
+    mod_config = MODULES[module_name]
     
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"http://127.0.0.1:{config['port']}/api/health",
+                f"http://{mod_config['host']}:{mod_config['port']}/api/health",
                 timeout=2.0
             )
             if response.status_code == 200:
@@ -76,12 +82,12 @@ async def proxy_request(module_name: str, path: str, request: Request):
             content={"error": f"Unknown module '{module_name}'"}
         )
 
-    config = MODULES[module_name]
-    target_url = f"http://127.0.0.1:{config['port']}/{path}"
+    mod_config = MODULES[module_name]
+    target_url = f"http://{mod_config['host']}:{mod_config['port']}/{path}"
 
     body = await request.body()
     headers = dict(request.headers)
-    headers["host"] = f"127.0.0.1:{config['port']}"
+    headers["host"] = f"{mod_config['host']}:{mod_config['port']}"
 
     async with httpx.AsyncClient() as client:
         try:
@@ -129,19 +135,22 @@ async def proxy_request(module_name: str, path: str, request: Request):
 if __name__ == "__main__":
     import uvicorn
     
+    orch_host = config.get_orchestrator_host()
+    orch_port = config.get_orchestrator_port()
+    
     print("=" * 70)
     print("🚀 IDK-AI Orchestrator (API Gateway)")
     print("=" * 70)
-    print(f"Orchestrator running on: http://127.0.0.1:8000")
+    print(f"Orchestrator running on: http://{orch_host}:{orch_port}")
     print(f"\nRegistered modules:")
-    for name, config in MODULES.items():
-        print(f"  - {name}: port {config['port']} - {config['description']}")
+    for name, mod_config in MODULES.items():
+        print(f"  - {name}: {mod_config['host']}:{mod_config['port']} - {mod_config['description']}")
     print(f"\n⚠️  Start each module manually before use!")
     print("=" * 70)
     
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8000,
+        port=orch_port,
         log_level="info"
     )

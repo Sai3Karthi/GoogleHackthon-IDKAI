@@ -30,6 +30,16 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any, Set, Optional
 
+# Load configuration
+try:
+    root_path = Path(__file__).parent.parent.parent.parent
+    sys.path.insert(0, str(root_path))
+    from config_loader import get_config
+    config = get_config()
+except Exception as e:
+    print(f"Warning: Could not load config: {e}. Using defaults.")
+    config = None
+
 import requests
 
 # Load environment variables from root .env file
@@ -202,11 +212,20 @@ def run_pipeline(args: argparse.Namespace) -> int:
         # Notify frontend that new batch is available
         try:
             import requests
-            # Try both common frontend ports
-            for port in [3001, 3000]:
+            # Get frontend URL from config
+            if config:
+                frontend_url = config.get_frontend_url()
+                frontend_ports = [config.get_frontend_port()]
+            else:
+                # Fallback to common frontend ports
+                frontend_url = "http://localhost"
+                frontend_ports = [3001, 3000]
+            
+            for port in frontend_ports:
                 try:
+                    url = f"{frontend_url.rsplit(':', 1)[0]}:{port}/api/perspective-update"
                     requests.post(
-                        f"http://localhost:{port}/api/perspective-update",
+                        url,
                         json={
                             "color": color_name,
                             "count": len(all_persp),
@@ -214,7 +233,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
                         },
                         timeout=1
                     )
-                    logger.info(f"Notified frontend on port {port} of {color_name} batch update")
+                    logger.info(f"Notified frontend at {url} of {color_name} batch update")
                     break
                 except:
                     continue
@@ -235,18 +254,27 @@ def run_pipeline(args: argparse.Namespace) -> int:
     # Notify frontend that pipeline is complete
     try:
         import requests
-        # Try both common frontend ports
-        for port in [3001, 3000]:
+        # Get frontend URL from config
+        if config:
+            frontend_url = config.get_frontend_url()
+            frontend_ports = [config.get_frontend_port()]
+        else:
+            # Fallback to common frontend ports
+            frontend_url = "http://localhost"
+            frontend_ports = [3001, 3000]
+        
+        for port in frontend_ports:
             try:
+                url = f"{frontend_url.rsplit(':', 1)[0]}:{port}/api/perspective-complete"
                 requests.post(
-                    f"http://localhost:{port}/api/perspective-complete",
+                    url,
                     json={
                         "total_perspectives": len(final_obj['perspectives']),
                         "status": "completed"
                     },
                     timeout=1
                 )
-                logger.info(f"Notified frontend on port {port} of pipeline completion")
+                logger.info(f"Notified frontend at {url} of pipeline completion")
                 break
             except:
                 continue
@@ -299,8 +327,15 @@ def main() -> None:
     code = run_pipeline(args)
 
     try:
+        import requests
+        # Get orchestrator URL from config
+        if config:
+            orchestrator_url = config.get_orchestrator_url()
+        else:
+            orchestrator_url = "http://127.0.0.1:8000"
+        
         requests.post(
-            "http://127.0.0.1:8000/api/pipeline_complete",
+            f"{orchestrator_url}/api/pipeline_complete",
             json={"status": "done"},
             timeout=10
         )
