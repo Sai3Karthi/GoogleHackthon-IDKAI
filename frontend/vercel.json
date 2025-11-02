@@ -1,26 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "framework": "nextjs",
-  "rewrites": [
-    {
-      "source": "/module1/:path*",
-      "destination": "http://YOUR_BACKEND_URL:8000/module1/:path*"
-    },
-    {
-      "source": "/module2/:path*",
-      "destination": "http://YOUR_BACKEND_URL:8000/module2/:path*"
-    },
-    {
-      "source": "/module3/:path*",
-      "destination": "http://YOUR_BACKEND_URL:8000/module3/:path*"
-    },
-    {
-      "source": "/run/:path*",
-      "destination": "http://YOUR_BACKEND_URL:8000/run/:path*"
-    }
-  ],
-  "env": {
-    "NEXT_PUBLIC_API_URL": "http://YOUR_BACKEND_URL:8000"
-  }
+  "framework": "nextjs"
 }

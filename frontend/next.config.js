@@ -1,16 +1,42 @@
-const { loadConfig } = require('./config-loader');
+// Check if we're in production (Vercel) or development (local)
+const isProduction = process.env.NODE_ENV === 'production';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-// Load configuration
-const config = loadConfig();
-const orchestratorUrl = `http://${config.orchestratorHost}:${config.orchestratorPort}`;
+let orchestratorUrl;
 
-console.log(`[Next.js Config] Using orchestrator at: ${orchestratorUrl}`);
+if (isProduction && apiUrl) {
+  // Production: Use environment variable
+  orchestratorUrl = apiUrl;
+  console.log(`[Next.js Config] Production mode - Using API URL: ${orchestratorUrl}`);
+} else {
+  // Development: Use local config
+  try {
+    const { loadConfig } = require('./config-loader');
+    const config = loadConfig();
+    orchestratorUrl = `http://${config.orchestratorHost}:${config.orchestratorPort}`;
+    console.log(`[Next.js Config] Development mode - Using orchestrator at: ${orchestratorUrl}`);
+  } catch (error) {
+    // Fallback for production build without config-loader
+    orchestratorUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    console.log(`[Next.js Config] Fallback mode - Using: ${orchestratorUrl}`);
+  }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [config.orchestratorHost, config.module3Host, config.frontendHost, 'localhost'],
+    domains: ['localhost', '127.0.0.1'],
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
   async rewrites() {
     return [
