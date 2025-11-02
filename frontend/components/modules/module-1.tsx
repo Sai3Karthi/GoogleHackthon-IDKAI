@@ -256,6 +256,41 @@ export function Module1() {
     }
   }
 
+  const clearInputOnly = () => {
+    // Clear input fields but keep the result visible
+    setInput("")
+    setImageFile(null)
+    setImagePreview(null)
+    setImageUrl("")
+    setContextText("")
+    setError(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const startNewSession = () => {
+    if (confirm('Start a new session? This will clear all current analysis data.')) {
+      console.log('[Module1] Starting new session - clearing all data')
+      // Clear all state
+      clearAll()
+      // Clear session storage
+      if (typeof window !== 'undefined') {
+        const { clearSession } = require('@/lib/session-manager')
+        clearSession()
+      }
+      // Cancel any pending redirects
+      if (redirectTimerRef.current) {
+        clearInterval(redirectTimerRef.current)
+        redirectTimerRef.current = null
+      }
+      setRedirectCountdown(null)
+      // Reset to text mode
+      setAnalysisMode("text")
+      console.log('[Module1] New session started')
+    }
+  }
+
   const getRiskColor = (level: string) => {
     switch (level) {
       case "dangerous": return "text-red-400"
@@ -273,27 +308,35 @@ export function Module1() {
       status="progress"
     >
       <div className="space-y-12">
-        {/* Mode Selector */}
-        <div className="flex gap-4 border-b border-white/10 pb-4">
+        {/* Mode Selector & New Session */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex gap-4">
+            <button
+              onClick={() => { setAnalysisMode("text"); clearInputOnly(); }}
+              className={`px-6 py-2 text-sm transition-all ${
+                analysisMode === "text"
+                  ? "text-white border-b-2 border-white"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              Text/URL Analysis
+            </button>
+            <button
+              onClick={() => { setAnalysisMode("image"); clearInputOnly(); }}
+              className={`px-6 py-2 text-sm transition-all ${
+                analysisMode === "image"
+                  ? "text-white border-b-2 border-white"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              Image Analysis
+            </button>
+          </div>
           <button
-            onClick={() => { setAnalysisMode("text"); clearAll(); }}
-            className={`px-6 py-2 text-sm transition-all ${
-              analysisMode === "text"
-                ? "text-white border-b-2 border-white"
-                : "text-white/40 hover:text-white/70"
-            }`}
+            onClick={startNewSession}
+            className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
           >
-            Text/URL Analysis
-          </button>
-          <button
-            onClick={() => { setAnalysisMode("image"); clearAll(); }}
-            className={`px-6 py-2 text-sm transition-all ${
-              analysisMode === "image"
-                ? "text-white border-b-2 border-white"
-                : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            Image Analysis
+             New Session
           </button>
         </div>
 

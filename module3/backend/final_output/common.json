@@ -1,14 +1,14 @@
 [
     {
-        "color": "green",
-        "bias_x": 0.5,
+        "color": "yellow",
+        "bias_x": 0.4583,
         "significance_y": 0.7,
-        "text": "The debate should be grounded in facts and evidence, not speculation or political rhetoric."
+        "text": "The article's claims, if proven, could have significant implications for India's standing as a stable and democratic nation on the world stage."
     },
     {
         "color": "green",
-        "bias_x": 0.5417,
-        "significance_y": 0.5,
-        "text": "A thorough technical audit of the electoral software is necessary to either substantiate or refute these serious claims."
+        "bias_x": 0.5,
+        "significance_y": 0.7,
+        "text": "The article raises important questions about the security and transparency of our electoral technology, which are valid concerns for any democracy."
     }
 ]

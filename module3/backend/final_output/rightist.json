@@ -1,38 +1,38 @@
 [
     {
-        "color": "violet",
-        "bias_x": 1.0,
+        "color": "blue",
+        "bias_x": 0.75,
         "significance_y": 0.9,
-        "text": "This is an attack on the very soul of Maharashtra, which has always been a bastion of law and order and a testament to democratic values."
+        "text": "The Congress party is so desperate to regain power that they are willing to lie to the people and damage the nation's reputation."
     },
     {
-        "color": "indigo",
-        "bias_x": 0.875,
-        "significance_y": 0.85,
-        "text": "The opposition is trying to create a narrative of victimhood, but their own actions demonstrate a disregard for the rule of law and democratic norms."
+        "color": "blue",
+        "bias_x": 0.6667,
+        "significance_y": 0.8,
+        "text": "The Congress party's history of questioning election results whenever they lose makes these allegations entirely believable."
     },
     {
         "color": "indigo",
         "bias_x": 0.7917,
         "significance_y": 0.8,
-        "text": "The opposition's desperation has led them to invent a sophisticated, imaginary conspiracy theory to explain their own electoral failures."
+        "text": "The Congress party's willingness to make such serious and unfounded accusations is a sign of its moral bankruptcy and its disregard for the rule of law."
     },
     {
         "color": "violet",
         "bias_x": 0.9167,
-        "significance_y": 0.74,
-        "text": "This is a desperate attempt by a failing dynasty to cling to power by subverting the will of the people of Maharashtra."
+        "significance_y": 0.8,
+        "text": "The Congress party is a cancer on the body of India, and it must be excised before it destroys us all."
     },
     {
-        "color": "blue",
-        "bias_x": 0.6667,
-        "significance_y": 0.71,
-        "text": "The opposition's focus on such a specific, unverified technical detail suggests a lack of a broader, positive vision for Maharashtra."
+        "color": "indigo",
+        "bias_x": 0.875,
+        "significance_y": 0.7,
+        "text": "The allegations are a direct assault on the will of the Indian people, who have clearly rejected the Congress party."
     },
     {
-        "color": "blue",
-        "bias_x": 0.75,
-        "significance_y": 0.65,
-        "text": "The opposition is trying to create a 'bogeyman' of electoral fraud to mask its own inability to connect with the aspirations of the people of Maharashtra."
+        "color": "violet",
+        "bias_x": 1.0,
+        "significance_y": 0.7,
+        "text": "The people of India will not tolerate these kinds of lies and deceit, and they will hold the Congress party accountable for their actions."
     }
 ]

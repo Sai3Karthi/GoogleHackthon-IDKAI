@@ -3,36 +3,36 @@
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "This is a direct assault on the democratic will of the people, and we must stand in solidarity with the opposition to defend our votes."
+        "text": "This is a textbook example of how the ruling party uses disinformation to discredit any opposition voice and suppress dissent."
     },
     {
         "color": "orange",
         "bias_x": 0.1667,
         "significance_y": 0.8,
-        "text": "While the allegations are serious, the opposition should also present more concrete evidence to substantiate claims of an automated software manipulating rolls."
-    },
-    {
-        "color": "orange",
-        "bias_x": 0.25,
-        "significance_y": 0.7,
-        "text": "Regardless of the outcome, this incident highlights the need for a comprehensive review of election laws to prevent future controversies."
+        "text": "The focus should be on the process of verifying election results, not on sensationalized claims that have not yet been substantiated."
     },
     {
         "color": "yellow",
         "bias_x": 0.3333,
-        "significance_y": 0.7,
-        "text": "The technical details of the alleged automated software are crucial for a proper understanding and evaluation of these claims."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.4167,
-        "significance_y": 0.65,
-        "text": "We need to understand the specific nature of the alleged manipulation and how it would have impacted the election results."
+        "significance_y": 0.8,
+        "text": "The claims, if true, would represent a significant threat to the integrity of Indian democracy and require immediate attention from the Election Commission."
     },
     {
         "color": "red",
         "bias_x": 0.0417,
         "significance_y": 0.6,
-        "text": "The ruling party's fear of losing is so great that they are resorting to outright fraud to stay in power."
+        "text": "The timing of this article, close to a major election, is highly suspicious and suggests a coordinated effort to influence voters."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2083,
+        "significance_y": 0.6,
+        "text": "An independent, non-partisan body should be tasked with investigating any and all allegations of electoral irregularities to ensure public trust."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.375,
+        "significance_y": 0.6,
+        "text": "The public's trust in the electoral process is paramount, and these kinds of unsubstantiated allegations can erode that trust, which is damaging in the long run."
     }
 ]

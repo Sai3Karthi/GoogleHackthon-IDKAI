@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
 
@@ -21,6 +21,7 @@ interface Module1Output {
 }
 
 export function Module5() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const source = searchParams?.get("source")
   const skipReason = searchParams?.get("skip_reason")
@@ -32,6 +33,20 @@ export function Module5() {
   useEffect(() => {
     loadOutputData()
   }, [])
+
+  const startNewSession = () => {
+    if (confirm('Start a new session? This will clear all current data and return to Module 1.')) {
+      console.log('[Module5] Starting new session - clearing all data')
+      // Clear session storage
+      if (typeof window !== 'undefined') {
+        const { clearSession } = require('@/lib/session-manager')
+        clearSession()
+      }
+      // Redirect to Module 1
+      console.log('[Module5] Redirecting to Module 1')
+      router.push('/modules/1')
+    }
+  }
 
   const loadOutputData = async () => {
     try {
@@ -77,6 +92,16 @@ export function Module5() {
       status="ready"
     >
       <div className="space-y-12">
+        {/* New Session Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={startNewSession}
+            className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
+          >
+             New Session
+          </button>
+        </div>
+
         {/* Source Information */}
         {source === "module1" && skipReason && (
           <div className="border border-blue-500/30 bg-blue-500/5 rounded p-8">

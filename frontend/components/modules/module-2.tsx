@@ -39,25 +39,13 @@ export function Module2() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
+  const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    // Try to restore from session first
-    const sessionData = getModule2Data()
-    if (sessionData?.output) {
-      console.log('[Module2] Restoring from session:', sessionData.output)
-      setOutput(sessionData.output)
-      setLoading(false)
-      // Always start countdown to Module 3 (Module 3 is always next in pipeline)
-      console.log('[Module2] Starting countdown to Module 3...')
-      // Small delay to ensure UI is rendered
-      setTimeout(() => {
-        startRedirectCountdown()
-      }, 100)
-    } else {
-      console.log('[Module2] No session data, loading from backend...')
-      loadOutputData()
-    }
+    // ALWAYS check backend first to stay synced
+    console.log('[Module2] Checking backend for latest data...')
+    loadOutputData()
     
     setCurrentModule(2)
     
@@ -71,11 +59,26 @@ export function Module2() {
   const loadOutputData = async () => {
     try {
       setLoading(true)
+      setError(null) // Clear any previous errors
+      
+      // Check if we have session data (user navigated back)
+      const sessionData = getModule2Data()
+      const hasSessionData = sessionData?.output !== undefined && sessionData?.output !== null
+      
       const response = await fetch("/module2/api/output")
       
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error("No classification data available. Please run Module 1 analysis first.")
+        }
+        // For 500 errors during processing, show "Please wait..." instead
+        if (response.status === 500) {
+          setError("Please wait... Processing your request")
+          // Retry after 3 seconds
+          setTimeout(() => {
+            loadOutputData()
+          }, 3000)
+          return
         }
         throw new Error("Failed to load classification data")
       }
@@ -86,9 +89,17 @@ export function Module2() {
       // Save to session
       saveModule2Data({ output: data })
       
-      // Always auto-redirect to Module 3 after 10 seconds (Module 3 is the next step)
-      console.log('[Module2] Starting countdown to Module 3')
-      startRedirectCountdown()
+      // Only start countdown if:
+      // 1. This is fresh data (no previous session data)
+      // 2. AND we haven't already triggered redirect
+      if (!hasSessionData && !hasTriggeredRedirect) {
+        console.log('[Module2] Fresh data from backend, starting countdown to Module 3')
+        setHasTriggeredRedirect(true)
+        startRedirectCountdown()
+      } else if (hasSessionData) {
+        console.log('[Module2] Backend data loaded, but session exists - user navigated back (no redirect)')
+        setHasTriggeredRedirect(true) // Prevent countdown on navigation back
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data")
     } finally {
@@ -150,9 +161,9 @@ export function Module2() {
   }
 
   const getCategoryColor = (value: number) => {
-    if (value >= 40) return "bg-purple-500/20 border-purple-500/40 text-purple-300"
-    if (value >= 20) return "bg-blue-500/20 border-blue-500/40 text-blue-300"
-    if (value >= 10) return "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
+    if (value >= 40) return "bg-blue-500/20 border-blue-500/40 text-blue-300"
+    if (value >= 20) return "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
+    if (value >= 10) return "bg-teal-500/20 border-teal-500/40 text-teal-300"
     return "bg-white/10 border-white/20 text-white/50"
   }
 
@@ -171,11 +182,26 @@ export function Module2() {
         )}
 
         {error && (
-          <div className="border border-red-500/30 bg-red-500/5 rounded p-8">
-            <p className="text-red-400 text-sm">{error}</p>
-            <p className="text-white/40 text-xs mt-2">
-              Run an analysis in Module 1 first, then this module will automatically process it.
-            </p>
+          <div className={`border rounded p-8 ${
+            error.includes("Please wait") 
+              ? "border-blue-500/30 bg-blue-500/5" 
+              : "border-red-500/30 bg-red-500/5"
+          }`}>
+            <p className={`text-sm ${
+              error.includes("Please wait") 
+                ? "text-blue-400" 
+                : "text-red-400"
+            }`}>{error}</p>
+            {!error.includes("Please wait") && (
+              <p className="text-white/40 text-xs mt-2">
+                Run an analysis in Module 1 first, then this module will automatically process it.
+              </p>
+            )}
+            {error.includes("Please wait") && (
+              <p className="text-white/40 text-xs mt-2">
+                The backend is processing your request. This may take a few moments...
+              </p>
+            )}
           </div>
         )}
 
@@ -275,7 +301,7 @@ export function Module2() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="text-2xl">
-                    {output.detailed_analysis.requires_debate ? "🎯" : "✓"}
+                    {output.detailed_analysis.requires_debate ? "" : "✓"}
                   </div>
                   <div>
                     <div className="text-white/80 font-medium">
@@ -310,7 +336,7 @@ export function Module2() {
                     </div>
                     <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-700"
+                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-700"
                         style={{ width: `${value}%` }}
                       />
                     </div>
