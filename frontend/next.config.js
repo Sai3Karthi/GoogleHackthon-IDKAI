@@ -7,8 +7,12 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/module3/:path*',
-        destination: 'http://localhost:8002/:path*',
+        source: '/module3/:path*',
+        destination: 'http://localhost:8000/module3/:path*',
+      },
+      {
+        source: '/run/:path*',
+        destination: 'http://localhost:8000/run/:path*',
       },
     ]
   },

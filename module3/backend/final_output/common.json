@@ -1,20 +1,26 @@
 [
     {
         "color": "green",
-        "bias_x": 0.5385,
-        "significance_y": 0.89,
-        "text": "Let us use the memory of Charles James Kirk to re-evaluate our own priorities and mortality."
+        "bias_x": 0.4318,
+        "significance_y": 0.8,
+        "text": "This is a welcome sign of political maturity, demonstrating a willingness to work across party lines for a common good."
     },
     {
         "color": "green",
-        "bias_x": 0.4769,
-        "significance_y": 0.84,
-        "text": "A moment of silence in honor of Charles James Kirk seems appropriate given his community impact."
+        "bias_x": 0.4773,
+        "significance_y": 0.8,
+        "text": "The opposition's willingness to support the government on this issue is a positive step towards a more constructive political environment."
     },
     {
         "color": "green",
-        "bias_x": 0.5692,
-        "significance_y": 0.79,
-        "text": "The dates provide a framework for contextualizing his life and its eventual conclusion."
+        "bias_x": 0.5227,
+        "significance_y": 0.8,
+        "text": "This is a commendable example of how political parties can unite to address a national crisis."
+    },
+    {
+        "color": "green",
+        "bias_x": 0.447,
+        "significance_y": 0.7,
+        "text": "It's important to verify the feasibility and specific nature of the support being offered."
     }
 ]

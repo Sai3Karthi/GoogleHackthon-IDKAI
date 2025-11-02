@@ -65,37 +65,87 @@ export function Module3() {
     // Cleanup expired caches on mount
     cleanupExpiredCaches()
     
-    // Load input data
-    const cachedInput = localStorage.getItem('module3_input')
-    const input = cachedInput ? JSON.parse(cachedInput) : fallbackInput
-    setInputData(input)
-    
-    if (!cachedInput) {
-      localStorage.setItem('module3_input', JSON.stringify(fallbackInput))
+    // Load input data from backend via GET request
+    const loadInputData = async () => {
+      try {
+        const response = await fetch("/module3/api/input")
+        if (response.ok) {
+          const input = await response.json()
+          setInputData(input)
+          
+          // Generate hash for this input
+          const hash = generateInputHash({
+            topic: input.topic,
+            text: input.text
+          })
+          setCurrentInputHash(hash)
+          
+          // Try to load from cache
+          const cached = loadPerspectivesFromCache(hash)
+          if (cached) {
+            setPerspectives(cached.perspectives)
+            setFinalOutput(cached.finalOutput)
+            setIsFromCache(true)
+            setCurrentStep(1)
+            setShowGraph(true)
+            setAutoAdvanceTriggered(true)
+          } else {
+            setIsFromCache(false)
+          }
+          
+          setBackendRunning(true)
+        } else {
+          // Fallback to hardcoded input if backend not available
+          console.log("Backend not available, using fallback input")
+          setInputData(fallbackInput)
+          
+          const hash = generateInputHash({
+            topic: fallbackInput.topic,
+            text: fallbackInput.text
+          })
+          setCurrentInputHash(hash)
+          
+          const cached = loadPerspectivesFromCache(hash)
+          if (cached) {
+            setPerspectives(cached.perspectives)
+            setFinalOutput(cached.finalOutput)
+            setIsFromCache(true)
+            setCurrentStep(1)
+            setShowGraph(true)
+            setAutoAdvanceTriggered(true)
+          } else {
+            setIsFromCache(false)
+          }
+          
+          setBackendRunning(false)
+        }
+      } catch (error) {
+        console.error("Error loading input data:", error)
+        // Use fallback input on error
+        setInputData(fallbackInput)
+        setBackendRunning(false)
+        
+        const hash = generateInputHash({
+          topic: fallbackInput.topic,
+          text: fallbackInput.text
+        })
+        setCurrentInputHash(hash)
+        
+        const cached = loadPerspectivesFromCache(hash)
+        if (cached) {
+          setPerspectives(cached.perspectives)
+          setFinalOutput(cached.finalOutput)
+          setIsFromCache(true)
+          setCurrentStep(1)
+          setShowGraph(true)
+          setAutoAdvanceTriggered(true)
+        } else {
+          setIsFromCache(false)
+        }
+      }
     }
     
-    // Generate hash for this input
-    const hash = generateInputHash({
-      topic: input.topic,
-      text: input.text
-    })
-    setCurrentInputHash(hash)
-    
-    // Try to load from cache
-    const cached = loadPerspectivesFromCache(hash)
-    if (cached) {
-      setPerspectives(cached.perspectives)
-      setFinalOutput(cached.finalOutput)
-      setIsFromCache(true)
-      setCurrentStep(1)
-      setShowGraph(true)
-      setAutoAdvanceTriggered(true)
-    } else {
-      setIsFromCache(false)
-    }
-    
-    // Check backend status
-    checkBackendStatus()
+    loadInputData()
   }, [])
 
   // Handle ESC key for methodology modal
@@ -116,9 +166,9 @@ export function Module3() {
       if (currentStep === 3 && !finalOutput && perspectives.length > 0) {
         try {
           const [leftistRes, commonRes, rightistRes] = await Promise.all([
-            fetch('http://localhost:8002/module3/output/leftist'),
-            fetch('http://localhost:8002/module3/output/common'),
-            fetch('http://localhost:8002/module3/output/rightist')
+            fetch('/module3/module3/output/leftist'),
+            fetch('/module3/module3/output/common'),
+            fetch('/module3/module3/output/rightist')
           ])
           
           if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
@@ -205,7 +255,7 @@ export function Module3() {
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch("http://localhost:8002/api/status", { 
+      const response = await fetch("/module3/api/status", { 
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       })
@@ -219,62 +269,52 @@ export function Module3() {
     }
   }
 
-  const startBackend = async () => {
-    setStartingBackend(true)
+const startModule3 = async () => {
+  setStartingBackend(true);
+
+  try {
+    // Check if module3 is running via health check
+    const response = await fetch('/module3/api/health');
     
-    try {
-      const statusResponse = await fetch('/api/start-backend', { method: 'GET' })
-      const statusResult = await statusResponse.json()
-      
-      if (statusResult.portInUse) {
-        const cleanupResponse = await fetch('/api/start-backend', { method: 'PATCH' })
-        const cleanupResult = await cleanupResponse.json()
-        
-        if (!cleanupResult.success) {
-          alert(`Unable to free port automatically.\n\nPlease:\n1. Run kill-backend.bat\n2. Or close Python processes in Task Manager\n3. Then try again.`)
-          setStartingBackend(false)
-          return
-        }
-      }
-      
-      const response = await fetch('/api/start-backend', { method: 'POST' })
-      const result = await response.json()
-      
-      if (result.success) {
-        await new Promise(resolve => setTimeout(resolve, 6000))
-        await checkBackendStatus()
-        setStartingBackend(false)
-        
-        setCurrentStep(1)
-        setIsGenerating(true)
-        setLoading(true)
-        setPerspectives([])
-        setFinalOutput(null)
-        setShowGraph(false)
-  setAutoAdvanceTriggered(false)
-        
-        await startPerspectiveGeneration()
-      } else {
-        if (result.error?.includes('PORT_IN_USE')) {
-          alert(`Port still in use.\n\nPlease:\n1. Run kill-backend.bat\n2. Or restart your computer\n\nThen try again.`)
-        } else {
-          alert(`Failed to start backend.\n\nEnsure:\n1. Python is installed\n2. Dependencies installed: pip install -r requirements.txt\n3. Backend directory exists`)
-        }
-        setStartingBackend(false)
-      }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`)
-      setStartingBackend(false)
+    if (response.ok) {
+      setBackendRunning(true);
+      setStartingBackend(false);
+      setCurrentStep(1);
+      setIsGenerating(true);
+      setLoading(true);
+      setPerspectives([]);
+      setFinalOutput(null);
+      setShowGraph(false);
+      setAutoAdvanceTriggered(false);
+
+      await startPerspectiveGeneration();
+    } else {
+      alert('Module3 backend is not running. Please start it using start-module3.bat');
+      setStartingBackend(false);
     }
+
+  } catch (error: any) {
+    alert('Module3 backend is not running. Please start it using start-module3.bat');
+    setStartingBackend(false);
   }
+};
+
+
 
   const fetchInputData = async () => {
     try {
-      const response = await fetch("http://localhost:8002/api/input")
+      const response = await fetch("/module3/api/input")
       if (response.ok) {
         const data = await response.json()
         setInputData(data)
-        localStorage.setItem('module3_input', JSON.stringify(data))
+        
+        // Update hash when input changes
+        const hash = generateInputHash({
+          topic: data.topic,
+          text: data.text
+        })
+        setCurrentInputHash(hash)
+        
         setBackendRunning(true)
       }
     } catch (error) {
@@ -283,31 +323,7 @@ export function Module3() {
     }
   }
 
-  const stopBackend = async () => {
-    try {
-      const response = await fetch('/api/start-backend', {
-        method: 'DELETE'
-      })
-      
-      const result = await response.json()
-      
-      if (result.success) {
-        setBackendRunning(false)
-        alert('Backend stopped successfully')
-      }
-    } catch (error: any) {
-      console.error("Error stopping backend:", error)
-      alert(`Error stopping backend: ${error.message}`)
-    }
-  }
 
-  const startAutoFlow = () => {
-    // Auto-start generation after 5 seconds
-    setTimeout(() => {
-      setCurrentStep(1)
-      startPerspectiveGeneration()
-    }, 5000)
-  }
 
   const startPerspectiveGeneration = async () => {
     setIsGenerating(true)
@@ -320,7 +336,7 @@ export function Module3() {
       setupEventListeners()
       
       // Start the pipeline
-      const response = await fetch("http://localhost:8002/api/run_pipeline_stream", {
+      const response = await fetch("/module3/api/run_pipeline_stream", {
         method: "POST",
       })
 
@@ -347,7 +363,7 @@ export function Module3() {
         if (data.type === 'batch') {
                     
           // Fetch the actual perspectives from backend (ONLY when notified)
-          const response = await fetch("http://localhost:8002/api/output")
+          const response = await fetch("/module3/api/output")
           if (response.ok) {
             const outputData = await response.json()
             
@@ -382,7 +398,7 @@ export function Module3() {
           setLoading(false)
           
           // Fetch the complete output.json one final time
-          const finalResponse = await fetch("http://localhost:8002/api/output")
+          const finalResponse = await fetch("/module3/api/output")
           if (finalResponse.ok) {
             const finalData = await finalResponse.json()
             
@@ -393,9 +409,9 @@ export function Module3() {
               // Fetch clustered output from backend final_output files
               try {
                 const [leftistRes, commonRes, rightistRes] = await Promise.all([
-                  fetch("http://localhost:8002/module3/output/leftist"),
-                  fetch("http://localhost:8002/module3/output/common"),
-                  fetch("http://localhost:8002/module3/output/rightist")
+                  fetch("/module3/module3/output/leftist"),
+                  fetch("/module3/module3/output/common"),
+                  fetch("/module3/module3/output/rightist")
                 ])
                 
                 if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
@@ -483,40 +499,47 @@ export function Module3() {
                 </span>
               </div>
               {!backendRunning && (
-                <p className="text-xs text-white/40">Start the backend to enable perspective generation</p>
+                <p className="text-xs text-white/40">Run start-module3.bat to start the backend</p>
               )}
             </div>
             <div className="flex items-center gap-3">
               {!backendRunning && (
                 <button
-                  onClick={startBackend}
-                  disabled={startingBackend}
-                  className="px-4 py-2 border border-white/20 rounded text-sm text-white/80 hover:bg-white/5 transition-all disabled:opacity-50"
-                >
-                  {startingBackend ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Starting...
-                    </span>
-                  ) : (
-                    'Start Backend'
-                  )}
-                </button>
-              )}
-              {backendRunning && currentStep === 0 && (
-                <button
-                  onClick={stopBackend}
-                  className="px-4 py-2 border border-red-500/30 rounded text-sm text-red-400 hover:bg-red-500/10 transition-all"
-                >
-                  Stop Backend
-                </button>
-              )}
-              {currentStep === 0 && (
-                <button
                   onClick={checkBackendStatus}
                   className="px-4 py-2 border border-white/20 rounded text-sm text-white/80 hover:bg-white/5 transition-all"
                 >
-                  Check Status
+                  Refresh Status
+                </button>
+              )}
+              {backendRunning && currentStep === 0 && !isGenerating && (
+                <button
+                  onClick={startModule3}
+                  disabled={startingBackend || isGenerating}
+                  className="px-4 py-2 border border-green-500/30 rounded text-sm text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-50"
+                >
+                  {startingBackend ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+                      Checking...
+                    </span>
+                  ) : (
+                    'Begin Generation'
+                  )}
+                </button>
+              )}
+              {backendRunning && (currentStep > 0 || isGenerating) && (
+                <button
+                  onClick={() => {
+                    setCurrentStep(0)
+                    setIsGenerating(false)
+                    setLoading(false)
+                    setPerspectives([])
+                    setFinalOutput(null)
+                    setShowGraph(false)
+                  }}
+                  className="px-4 py-2 border border-red-500/30 rounded text-sm text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  Reset
                 </button>
               )}
             </div>

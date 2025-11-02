@@ -1,56 +1,74 @@
 [
     {
-        "color": "indigo",
-        "bias_x": 0.7692,
+        "color": "violet",
+        "bias_x": 0.8939,
         "significance_y": 0.9,
-        "text": "His unwavering commitment to his principles is a model for all citizens who wish to make a difference."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.8615,
-        "significance_y": 0.9,
-        "text": "His life was a powerful example of how one person can stand up for what they believe in and make a lasting impact."
+        "text": "This is a transparent ploy to undermine the government's authority and credibility."
     },
     {
         "color": "violet",
-        "bias_x": 1.0,
+        "bias_x": 0.9394,
         "significance_y": 0.9,
-        "text": "This is a non-issue that is being used as a weapon by the far-left to silence dissent."
+        "text": "This is a politically motivated stunt, not a genuine offer of help."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9773,
+        "significance_y": 0.9,
+        "text": "This is a classic example of how the opposition tries to exploit national crises for political gain."
     },
     {
         "color": "blue",
-        "bias_x": 0.6923,
-        "significance_y": 0.88,
-        "text": "This is a formal, neutral acknowledgment of the end of a person's life."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.8769,
-        "significance_y": 0.85,
-        "text": "This is a distraction from the real threats facing our nation, which are domestic and foreign enemies of our way of life."
+        "bias_x": 0.5758,
+        "significance_y": 0.8,
+        "text": "This is a welcome sign of political maturity from the opposition, focusing on common ground."
     },
     {
         "color": "blue",
-        "bias_x": 0.6,
-        "significance_y": 0.83,
-        "text": "This is a simple, factual record of a citizen's lifespan and should be treated as such."
+        "bias_x": 0.5909,
+        "significance_y": 0.8,
+        "text": "This is a constructive move that could lead to more effective and efficient solutions to the smog problem."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6136,
+        "significance_y": 0.8,
+        "text": "The focus should be on the problem of smog, not on political point-scoring."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6439,
+        "significance_y": 0.8,
+        "text": "This is a moment where collaboration, not confrontation, is the need of the hour."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6667,
+        "significance_y": 0.8,
+        "text": "This is a positive step towards building consensus on a critical environmental issue."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6894,
+        "significance_y": 0.8,
+        "text": "The government should accept this offer of support as a sign of good faith from the opposition."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.7121,
+        "significance_y": 0.8,
+        "text": "This is a welcome sign of political maturity and cooperation on a vital public issue."
     },
     {
         "color": "indigo",
-        "bias_x": 0.7385,
+        "bias_x": 0.7197,
         "significance_y": 0.8,
-        "text": "His passing is a reminder that even the most dedicated individuals are mortal and their time is finite."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.8308,
-        "significance_y": 0.8,
-        "text": "His dedication to his cause was a source of inspiration and a call to action for many."
+        "text": "This is a calculated political move designed to score cheap points and appear relevant."
     },
     {
         "color": "violet",
-        "bias_x": 0.9077,
+        "bias_x": 0.8636,
         "significance_y": 0.8,
-        "text": "This is a non-issue that is being blown out of proportion by the radical left to score political points."
+        "text": "This is a calculated attempt to gain political mileage by jumping on a popular issue."
     }
 ]

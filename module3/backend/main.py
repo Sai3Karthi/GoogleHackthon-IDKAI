@@ -418,10 +418,9 @@ if __name__ == "__main__":
     logger.info("Pipeline will run automatically on server startup via lifespan hook")
     
     uvicorn.run(
-            "main:app",
+        app,
         host="127.0.0.1",
-            port=port,
-            reload=False,
-            log_level="info"
-        )
+        port=port,
+        log_level="info"
+    )
     
