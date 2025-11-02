@@ -54,10 +54,24 @@ class Config:
         """Get module1 port only"""
         return self.config.getint('module1', 'port', fallback=8001)
     
+    def get_module2_url(self):
+        """Get full module2 URL"""
+        host = self.config.get('module2', 'host', fallback='127.0.0.1')
+        port = self.config.getint('module2', 'port', fallback=8002)
+        return f"http://{host}:{port}"
+    
+    def get_module2_host(self):
+        """Get module2 host only"""
+        return self.config.get('module2', 'host', fallback='127.0.0.1')
+    
+    def get_module2_port(self):
+        """Get module2 port only"""
+        return self.config.getint('module2', 'port', fallback=8002)
+    
     def get_module3_url(self):
         """Get full module3 URL"""
         host = self.config.get('module3', 'host', fallback='127.0.0.1')
-        port = self.config.getint('module3', 'port', fallback=8002)
+        port = self.config.getint('module3', 'port', fallback=8003)
         return f"http://{host}:{port}"
     
     def get_module3_host(self):
@@ -66,7 +80,7 @@ class Config:
     
     def get_module3_port(self):
         """Get module3 port only"""
-        return self.config.getint('module3', 'port', fallback=8002)
+        return self.config.getint('module3', 'port', fallback=8003)
     
     def get_frontend_url(self):
         """Get full frontend URL"""
@@ -100,5 +114,6 @@ if __name__ == "__main__":
     config = get_config()
     print(f"Orchestrator URL: {config.get_orchestrator_url()}")
     print(f"Module1 URL: {config.get_module1_url()}")
+    print(f"Module2 URL: {config.get_module2_url()}")
     print(f"Module3 URL: {config.get_module3_url()}")
     print(f"Frontend URL: {config.get_frontend_url()}")

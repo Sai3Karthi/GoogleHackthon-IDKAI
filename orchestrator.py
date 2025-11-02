@@ -14,6 +14,11 @@ MODULES = {
         "port": config.get_module1_port(),
         "description": "Link Verification & Scam Detection API"
     },
+    "module2": {
+        "host": config.get_module2_host(),
+        "port": config.get_module2_port(),
+        "description": "Information Classification & Significance Scoring API"
+    },
     "module3": {
         "host": config.get_module3_host(),
         "port": config.get_module3_port(),

@@ -24,7 +24,7 @@ export function ModuleLayout({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" && moduleNumber > 1) {
         router.replace(`/modules/${moduleNumber - 1}`)
-      } else if (e.key === "ArrowRight" && moduleNumber < 4) {
+      } else if (e.key === "ArrowRight" && moduleNumber < 5) {
         router.replace(`/modules/${moduleNumber + 1}`)
       }
     }
@@ -65,7 +65,7 @@ export function ModuleLayout({
               <div className="flex items-center gap-4">
                 {/* Module tabs */}
                 <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4].map((num) => (
+                  {[1, 2, 3, 4, 5].map((num) => (
                     <button
                       key={num}
                       onClick={() => router.replace(`/modules/${num}`)}
@@ -121,7 +121,7 @@ export function ModuleLayout({
 
               {/* Progress dots */}
               <div className="flex items-center gap-1.5">
-                {[1, 2, 3, 4].map((num) => (
+                {[1, 2, 3, 4, 5].map((num) => (
                   <div
                     key={num}
                     className={`h-1.5 rounded-full transition-all ${
@@ -134,8 +134,8 @@ export function ModuleLayout({
               </div>
 
               <button
-                onClick={() => moduleNumber < 4 && router.replace(`/modules/${moduleNumber + 1}`)}
-                disabled={moduleNumber === 4}
+                onClick={() => moduleNumber < 5 && router.replace(`/modules/${moduleNumber + 1}`)}
+                disabled={moduleNumber === 5}
                 className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <span>Next</span>

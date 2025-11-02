@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
+import { saveModule1Data, getModule1Data, setCurrentModule } from "@/lib/session-manager"
 
 interface AnalysisResult {
   input_type: string
@@ -31,9 +33,12 @@ interface AnalysisResult {
     dimensions: [number, number]
     source: string
   }
+  skip_to_final?: boolean
+  skip_reason?: string
 }
 
 export function Module1() {
+  const router = useRouter()
   const [input, setInput] = useState("")
   const [analysisMode, setAnalysisMode] = useState<"text" | "image">("text")
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -43,7 +48,27 @@ export function Module1() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Restore state from session on mount
+  useEffect(() => {
+    const sessionData = getModule1Data()
+    if (sessionData) {
+      console.log('[Module1] Restoring from session:', sessionData)
+      setInput(sessionData.input || "")
+      setAnalysisMode(sessionData.analysisMode || "text")
+      setResult(sessionData.result)
+    }
+    setCurrentModule(1)
+
+    return () => {
+      if (redirectTimerRef.current) {
+        clearInterval(redirectTimerRef.current)
+      }
+    }
+  }, [])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -79,6 +104,34 @@ export function Module1() {
     }
   }
 
+  const startRedirectCountdown = (path: string, queryParams?: string) => {
+    setRedirectCountdown(10)
+    
+    redirectTimerRef.current = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          if (redirectTimerRef.current) {
+            clearInterval(redirectTimerRef.current)
+          }
+          const url = queryParams ? `${path}?${queryParams}` : path
+          console.log('[Module1] Redirecting to:', url)
+          router.push(url)
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  const cancelRedirect = () => {
+    if (redirectTimerRef.current) {
+      clearInterval(redirectTimerRef.current)
+      redirectTimerRef.current = null
+    }
+    setRedirectCountdown(null)
+    console.log('[Module1] Auto-redirect cancelled')
+  }
+
   const analyzeContent = async () => {
     if (!input.trim()) {
       setError("Please enter a URL or text to analyze")
@@ -102,6 +155,20 @@ export function Module1() {
 
       const data: AnalysisResult = await response.json()
       setResult(data)
+      
+      // Save to session
+      saveModule1Data({
+        input: input.trim(),
+        analysisMode,
+        result: data
+      })
+      
+      if (data.skip_to_final) {
+        startRedirectCountdown('/modules/5', `source=module1&skip_reason=${encodeURIComponent(data.skip_reason || '')}`)
+      } else {
+        // Start countdown to Module 2 (10 seconds)
+        startRedirectCountdown('/modules/2')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed")
     } finally {
@@ -156,6 +223,19 @@ export function Module1() {
 
       const data: AnalysisResult = await response.json()
       setResult(data)
+      
+      // Save to session
+      saveModule1Data({
+        input: imageUrl.trim() || imageFile?.name || "image",
+        analysisMode: "image",
+        result: data
+      })
+      
+      if (data.skip_to_final) {
+        startRedirectCountdown('/modules/5', `source=module1&skip_reason=${encodeURIComponent(data.skip_reason || '')}`)
+      } else {
+        startRedirectCountdown('/modules/2')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Image analysis failed")
     } finally {
@@ -366,6 +446,49 @@ export function Module1() {
         {/* Results */}
         {result && (
           <>
+            {/* Auto-Redirect Notification */}
+            {redirectCountdown !== null && (
+              <div className={`border rounded p-6 animate-fadeIn ${
+                result.skip_to_final 
+                  ? 'border-yellow-500/30 bg-yellow-500/5' 
+                  : 'border-blue-500/30 bg-blue-500/5'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${
+                      result.skip_to_final 
+                        ? 'border-yellow-500/50' 
+                        : 'border-blue-500/50'
+                    }`}>
+                      <span className={`text-xl font-light ${
+                        result.skip_to_final 
+                          ? 'text-yellow-400' 
+                          : 'text-blue-400'
+                      }`}>{redirectCountdown}</span>
+                    </div>
+                    <div>
+                      <p className="text-white/90 text-sm font-medium mb-1">
+                        {result.skip_to_final 
+                          ? 'Skipping to Module 5: Final Analysis' 
+                          : 'Redirecting to Module 2: Classification'}
+                      </p>
+                      <p className="text-white/50 text-xs">
+                        {result.skip_to_final 
+                          ? result.skip_reason 
+                          : 'Your content will be classified and scored for significance'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={cancelRedirect}
+                    className="px-4 py-2 border border-white/20 rounded text-sm text-white/80 hover:bg-white/5 transition-all"
+                  >
+                    Stay Here
+                  </button>
+                </div>
+              </div>
+            )}
+            
             {/* Risk Assessment */}
             <div className="border border-white/10 rounded p-8">
               <div className="flex items-center justify-between mb-6">

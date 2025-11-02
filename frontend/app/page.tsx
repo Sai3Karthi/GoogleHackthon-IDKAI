@@ -156,12 +156,20 @@ export default function LandingPage() {
                   <div className="w-1 h-3 bg-white/40 rounded-full animate-bounce" />
                 </div>
               </div>
-              <button
-                onClick={handleTestItOut}
-                className="group relative px-8 py-4 overflow-hidden rounded-xl border border-white/30 bg-black/40 hover:bg-black/20 transition-all duration-300"
-              >
-                <span className="relative text-white font-medium text-lg">Experience Module 3</span>
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onClick={handleTestItOut}
+                  className="group relative px-8 py-4 overflow-hidden rounded-xl border border-white/30 bg-black/40 hover:bg-black/20 transition-all duration-300"
+                >
+                  <span className="relative text-white font-medium text-lg">Start Analysis</span>
+                </button>
+                <button
+                  onClick={() => router.push("/modules/5")}
+                  className="group relative px-8 py-4 overflow-hidden rounded-xl border border-white/20 bg-black/60 hover:bg-black/40 transition-all duration-300"
+                >
+                  <span className="relative text-white/80 font-medium text-lg">View Results</span>
+                </button>
+              </div>
             </div>
           </div>
         </section>

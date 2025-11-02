@@ -19,6 +19,10 @@ const nextConfig = {
         destination: `${orchestratorUrl}/module1/:path*`,
       },
       {
+        source: '/module2/:path*',
+        destination: `${orchestratorUrl}/module2/:path*`,
+      },
+      {
         source: '/module3/:path*',
         destination: `${orchestratorUrl}/module3/:path*`,
       },

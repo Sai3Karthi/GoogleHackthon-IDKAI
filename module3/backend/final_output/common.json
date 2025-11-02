@@ -1,26 +1,14 @@
 [
     {
         "color": "green",
-        "bias_x": 0.4318,
-        "significance_y": 0.8,
-        "text": "The offer of cooperation is a positive step that could lead to a more unified and effective approach to tackling pollution."
+        "bias_x": 0.5,
+        "significance_y": 0.7,
+        "text": "The debate should be grounded in facts and evidence, not speculation or political rhetoric."
     },
     {
         "color": "green",
-        "bias_x": 0.4621,
-        "significance_y": 0.8,
-        "text": "The government should seize this opportunity to demonstrate its commitment to environmental protection and public health."
-    },
-    {
-        "color": "green",
-        "bias_x": 0.4924,
-        "significance_y": 0.8,
-        "text": "The government's response to this offer will be a key indicator of its willingness to engage in constructive politics."
-    },
-    {
-        "color": "green",
-        "bias_x": 0.5227,
-        "significance_y": 0.8,
-        "text": "The government should take this as a serious proposal for partnership in addressing a critical public health crisis."
+        "bias_x": 0.5417,
+        "significance_y": 0.5,
+        "text": "A thorough technical audit of the electoral software is necessary to either substantiate or refute these serious claims."
     }
 ]

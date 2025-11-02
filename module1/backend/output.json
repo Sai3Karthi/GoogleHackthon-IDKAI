@@ -1,0 +1,19 @@
+{
+  "input_type": "text",
+  "risk_level": "safe",
+  "confidence": 0.95,
+  "threats": [],
+  "recommendation": "This content is a news report detailing political allegations of voter fraud in India. It does not contain any elements indicative of a scam, phishing, or malicious intent targeting the reader.",
+  "ai_powered": true,
+  "analysis_details": {
+    "red_flags": [
+      "The content is structured as a standard news article, attributed to an author and publication date, reporting on a political controversy. It discusses allegations of electoral manipulation made by political figures and includes counter-arguments from opposing parties. There are no calls to action, external links, requests for personal or financial information, urgencies, or attempts to distribute malicious software. The article is reporting on allegations of fraud, rather than attempting to perpetrate a fraud or spread misinformation itself (beyond reporting on the disputed claims of the parties involved)."
+    ],
+    "ai_explanation": "This content is a news report detailing political allegations of voter fraud in India. It does not contain any elements indicative of a scam, phishing, or malicious intent targeting the reader.",
+    "ai_reasoning": "The content is structured as a standard news article, attributed to an author and publication date, reporting on a political controversy. It discusses allegations of electoral manipulation made by political figures and includes counter-arguments from opposing parties. There are no calls to action, external links, requests for personal or financial information, urgencies, or attempts to distribute malicious software. The article is reporting on allegations of fraud, rather than attempting to perpetrate a fraud or spread misinformation itself (beyond reporting on the disputed claims of the parties involved).",
+    "text_length": 3483
+  },
+  "skip_to_final": false,
+  "skip_reason": null,
+  "timestamp": "2025-11-02T22:29:21.033718"
+}

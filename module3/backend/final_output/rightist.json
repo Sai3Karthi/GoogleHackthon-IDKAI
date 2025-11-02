@@ -1,74 +1,38 @@
 [
     {
-        "color": "blue",
-        "bias_x": 0.6515,
+        "color": "violet",
+        "bias_x": 1.0,
         "significance_y": 0.9,
-        "text": "This is a welcome demonstration of political maturity and a commitment to national interest above partisan politics."
+        "text": "This is an attack on the very soul of Maharashtra, which has always been a bastion of law and order and a testament to democratic values."
     },
     {
-        "color": "blue",
-        "bias_x": 0.6894,
-        "significance_y": 0.9,
-        "text": "The opposition's offer of support is a constructive move that should be met with a positive response from the government."
+        "color": "indigo",
+        "bias_x": 0.875,
+        "significance_y": 0.85,
+        "text": "The opposition is trying to create a narrative of victimhood, but their own actions demonstrate a disregard for the rule of law and democratic norms."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7917,
+        "significance_y": 0.8,
+        "text": "The opposition's desperation has led them to invent a sophisticated, imaginary conspiracy theory to explain their own electoral failures."
     },
     {
         "color": "violet",
-        "bias_x": 0.8864,
-        "significance_y": 0.9,
-        "text": "The government's long-term vision for sustainable development is the only answer to this complex problem, not piecemeal political gestures."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.9394,
-        "significance_y": 0.9,
-        "text": "This is a prime example of the opposition's politics of negativity and obstructionism."
-    },
-    {
-        "color": "violet",
-        "bias_x": 0.9773,
-        "significance_y": 0.9,
-        "text": "The government's comprehensive long-term strategy is the only way to address the smog crisis, not opposition grandstanding."
-    },
-    {
-        "color": "blue",
-        "bias_x": 0.5758,
-        "significance_y": 0.84,
-        "text": "The government's indifference to the 'filthy smog' is a direct threat to the lives of millions of Delhi residents."
+        "bias_x": 0.9167,
+        "significance_y": 0.74,
+        "text": "This is a desperate attempt by a failing dynasty to cling to power by subverting the will of the people of Maharashtra."
     },
     {
         "color": "blue",
         "bias_x": 0.6667,
-        "significance_y": 0.8,
-        "text": "This is a moment where all political parties should put aside their differences and work together for the common good."
+        "significance_y": 0.71,
+        "text": "The opposition's focus on such a specific, unverified technical detail suggests a lack of a broader, positive vision for Maharashtra."
     },
     {
         "color": "blue",
-        "bias_x": 0.7045,
-        "significance_y": 0.8,
-        "text": "The opposition's call for action on the smog is a legitimate concern that deserves a serious and cooperative response."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.7197,
-        "significance_y": 0.8,
-        "text": "The opposition is using a public health crisis as a political football to score points against the government."
-    },
-    {
-        "color": "indigo",
         "bias_x": 0.75,
-        "significance_y": 0.8,
-        "text": "The government should be wary of accepting offers of 'cooperation' from those who are actively trying to destabilize it."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.7803,
-        "significance_y": 0.8,
-        "text": "The opposition's 'support' is likely a veiled attempt to take credit if the problem is solved."
-    },
-    {
-        "color": "indigo",
-        "bias_x": 0.8106,
-        "significance_y": 0.8,
-        "text": "The opposition's offer is a disingenuous attempt to capitalize on a national crisis."
+        "significance_y": 0.65,
+        "text": "The opposition is trying to create a 'bogeyman' of electoral fraud to mask its own inability to connect with the aspirations of the people of Maharashtra."
     }
 ]

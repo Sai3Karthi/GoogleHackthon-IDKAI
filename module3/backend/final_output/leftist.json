@@ -3,72 +3,36 @@
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "This is a desperate plea from a responsible opposition leader facing a government that has failed its citizens on the most basic level."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.0303,
-        "significance_y": 0.8,
-        "text": "The 'filthy smog' is a direct consequence of the government's pro-industry policies that disregard environmental impact."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.0606,
-        "significance_y": 0.8,
-        "text": "The government's silence on this issue will be deafening, further highlighting its indifference to public health."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.0909,
-        "significance_y": 0.8,
-        "text": "The government's failure to address the smog is a direct assault on the health and well-being of millions."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.1212,
-        "significance_y": 0.8,
-        "text": "This is a moral imperative for the government, not just a political suggestion."
+        "text": "This is a direct assault on the democratic will of the people, and we must stand in solidarity with the opposition to defend our votes."
     },
     {
         "color": "orange",
-        "bias_x": 0.1439,
+        "bias_x": 0.1667,
         "significance_y": 0.8,
-        "text": "The opposition's cooperative tone, while welcome, should not be misconstrued as a lack of accountability for the government's failures."
+        "text": "While the allegations are serious, the opposition should also present more concrete evidence to substantiate claims of an automated software manipulating rolls."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.25,
+        "significance_y": 0.7,
+        "text": "Regardless of the outcome, this incident highlights the need for a comprehensive review of election laws to prevent future controversies."
     },
     {
         "color": "yellow",
-        "bias_x": 0.2879,
-        "significance_y": 0.8,
-        "text": "The political posturing around the smog is less important than the scientific solutions that are needed."
+        "bias_x": 0.3333,
+        "significance_y": 0.7,
+        "text": "The technical details of the alleged automated software are crucial for a proper understanding and evaluation of these claims."
     },
     {
         "color": "yellow",
-        "bias_x": 0.3182,
-        "significance_y": 0.8,
-        "text": "The focus should be on the practical steps that can be taken to mitigate the air pollution."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.3485,
-        "significance_y": 0.8,
-        "text": "Cooperation between the ruling and opposition parties is essential for tackling a crisis of this magnitude."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.3788,
-        "significance_y": 0.8,
-        "text": "The offer of support is a positive step, but it must be followed by genuine collaboration on the ground."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.4091,
-        "significance_y": 0.8,
-        "text": "The issue of air pollution transcends party politics and requires a united front to address it."
+        "bias_x": 0.4167,
+        "significance_y": 0.65,
+        "text": "We need to understand the specific nature of the alleged manipulation and how it would have impacted the election results."
     },
     {
         "color": "red",
-        "bias_x": 0.0152,
-        "significance_y": 0.7,
-        "text": "This highlights the critical gap between political rhetoric and concrete action when it comes to environmental crises."
+        "bias_x": 0.0417,
+        "significance_y": 0.6,
+        "text": "The ruling party's fear of losing is so great that they are resorting to outright fraud to stay in power."
     }
 ]

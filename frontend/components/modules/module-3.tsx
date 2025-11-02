@@ -12,6 +12,7 @@ import {
   clearCacheForHash,
   cleanupExpiredCaches
 } from "@/lib/cache-manager"
+import { saveModule3Data, getModule3Data, setCurrentModule } from "@/lib/session-manager"
 
 interface Perspective {
   color: string
@@ -46,6 +47,7 @@ export function Module3() {
   const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showClusteringDetails, setShowClusteringDetails] = useState(false)
   const [autoAdvanceTriggered, setAutoAdvanceTriggered] = useState(false)
+  const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -62,8 +64,29 @@ export function Module3() {
   }
 
   useEffect(() => {
+    // Set current module
+    setCurrentModule(3)
+    
     // Cleanup expired caches on mount
     cleanupExpiredCaches()
+    
+    // Try to restore from session first
+    const sessionData = getModule3Data()
+    if (sessionData && sessionData.perspectives.length > 0) {
+      console.log('[Module3] Restoring from session:', sessionData.perspectives.length, 'perspectives')
+      setPerspectives(sessionData.perspectives)
+      setFinalOutput(sessionData.finalOutput)
+      setCurrentInputHash(sessionData.inputHash)
+      setIsFromCache(true)
+      setCurrentStep(3)
+      setShowGraph(true)
+      setShowOutputGraph(true)
+      setAutoAdvanceTriggered(true)
+      setBackendRunning(true)
+      // Still load input data for display
+      fetchInputData().catch(console.error)
+      return
+    }
     
     // Load input data from backend via GET request
     const loadInputData = async () => {
@@ -83,17 +106,23 @@ export function Module3() {
           // Try to load from cache
           const cached = loadPerspectivesFromCache(hash)
           if (cached) {
+            console.log('[Module3] Loading from cache:', cached.perspectives.length, 'perspectives')
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
             setIsFromCache(true)
-            setCurrentStep(1)
+            setCurrentStep(3)
             setShowGraph(true)
+            setShowOutputGraph(true)
             setAutoAdvanceTriggered(true)
+            setBackendRunning(true)
+            console.log('[Module3] Cache loaded successfully')
           } else {
+            // No cache - check if backend is processing
+            console.log('[Module3] No cache found, checking backend status...')
             setIsFromCache(false)
+            setBackendRunning(true)
+            checkBackendStatusAndResume()
           }
-          
-          setBackendRunning(true)
         } else {
           // Fallback to hardcoded input if backend not available
           console.log("Backend not available, using fallback input")
@@ -107,21 +136,24 @@ export function Module3() {
           
           const cached = loadPerspectivesFromCache(hash)
           if (cached) {
+            console.log('[Module3] Loading from cache (fallback):', cached.perspectives.length, 'perspectives')
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
             setIsFromCache(true)
-            setCurrentStep(1)
+            setCurrentStep(3)
             setShowGraph(true)
+            setShowOutputGraph(true)
             setAutoAdvanceTriggered(true)
+            console.log('[Module3] Cache loaded successfully (fallback)')
           } else {
             setIsFromCache(false)
+            console.log('[Module3] No cache found for hash (fallback):', hash)
           }
           
           setBackendRunning(false)
         }
       } catch (error) {
         console.error("Error loading input data:", error)
-        // Use fallback input on error
         setInputData(fallbackInput)
         setBackendRunning(false)
         
@@ -136,8 +168,9 @@ export function Module3() {
           setPerspectives(cached.perspectives)
           setFinalOutput(cached.finalOutput)
           setIsFromCache(true)
-          setCurrentStep(1)
+          setCurrentStep(3)
           setShowGraph(true)
+          setShowOutputGraph(true)
           setAutoAdvanceTriggered(true)
         } else {
           setIsFromCache(false)
@@ -146,6 +179,14 @@ export function Module3() {
     }
     
     loadInputData()
+    
+    // Cleanup polling on unmount
+    return () => {
+      if (statusPollingRef.current) {
+        clearInterval(statusPollingRef.current)
+        statusPollingRef.current = null
+      }
+    }
   }, [])
 
   // Handle ESC key for methodology modal
@@ -253,6 +294,131 @@ export function Module3() {
     }
   }, [currentStep, autoAdvanceTriggered, perspectives.length])
 
+  const checkBackendStatusAndResume = async () => {
+    try {
+      const statusResponse = await fetch("/module3/api/status", { 
+        method: 'GET',
+        signal: AbortSignal.timeout(2000)
+      })
+      
+      if (!statusResponse.ok) {
+        console.log('[Module3] Backend not responding')
+        setBackendRunning(false)
+        setCurrentStep(0)
+        return
+      }
+      
+      const status = await statusResponse.json()
+      console.log('[Module3] Backend status:', status)
+      
+      setBackendRunning(true)
+      
+      // Resume based on backend state
+      if (status.status === 'completed' && status.pipeline_complete) {
+        console.log('[Module3] Pipeline already completed, loading results...')
+        await loadCompletedResults()
+      } else if (status.status === 'processing') {
+        console.log('[Module3] Pipeline in progress, resuming UI...')
+        setCurrentStep(1)
+        setIsGenerating(true)
+        setLoading(true)
+        setupEventListeners()
+        startStatusPolling()
+      } else {
+        console.log('[Module3] Backend idle, ready for generation')
+        setCurrentStep(0)
+      }
+    } catch (error) {
+      console.error('[Module3] Error checking backend status:', error)
+      setBackendRunning(false)
+      setCurrentStep(0)
+    }
+  }
+
+  const loadCompletedResults = async () => {
+    try {
+      // Fetch output.json
+      const outputResponse = await fetch("/module3/api/output")
+      if (outputResponse.ok) {
+        const outputData = await outputResponse.json()
+        if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
+          setPerspectives(outputData.perspectives)
+          setCurrentStep(2)
+          setShowGraph(true)
+          
+          // Fetch final clustered output
+          const [leftistRes, commonRes, rightistRes] = await Promise.all([
+            fetch("/module3/module3/output/leftist"),
+            fetch("/module3/module3/output/common"),
+            fetch("/module3/module3/output/rightist")
+          ])
+          
+          if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
+            const leftist = await leftistRes.json()
+            const common = await commonRes.json()
+            const rightist = await rightistRes.json()
+            
+            const clusteredOutput = { leftist, common, rightist }
+            setFinalOutput(clusteredOutput)
+            
+            // Save to cache and session
+            if (currentInputHash) {
+              savePerspectivesToCache(
+                currentInputHash,
+                outputData.perspectives,
+                clusteredOutput
+              )
+              saveModule3Data({
+                perspectives: outputData.perspectives,
+                finalOutput: clusteredOutput,
+                inputHash: currentInputHash
+              })
+              setIsFromCache(true)
+            }
+            
+            // Auto-advance to output step
+            setTimeout(() => {
+              setCurrentStep(3)
+              setShowOutputGraph(true)
+            }, 2000)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Module3] Error loading completed results:', error)
+    }
+  }
+
+  const startStatusPolling = () => {
+    // Clear any existing polling
+    if (statusPollingRef.current) {
+      clearInterval(statusPollingRef.current)
+    }
+    
+    // Poll every 2 seconds
+    statusPollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch("/module3/api/status")
+        if (response.ok) {
+          const status = await response.json()
+          
+          if (status.status === 'completed' && status.pipeline_complete) {
+            console.log('[Module3] Pipeline completed via polling')
+            if (statusPollingRef.current) {
+              clearInterval(statusPollingRef.current)
+              statusPollingRef.current = null
+            }
+            setIsGenerating(false)
+            setLoading(false)
+            await loadCompletedResults()
+          }
+        }
+      } catch (error) {
+        console.error('[Module3] Polling error:', error)
+      }
+    }, 2000)
+  }
+
   const checkBackendStatus = async () => {
     try {
       const response = await fetch("/module3/api/status", { 
@@ -261,7 +427,6 @@ export function Module3() {
       })
       if (response.ok) {
         setBackendRunning(true)
-        // Fetch fresh input data from backend
         fetchInputData()
       }
     } catch (error) {
@@ -269,35 +434,35 @@ export function Module3() {
     }
   }
 
-const startModule3 = async () => {
-  setStartingBackend(true);
+  const startModule3 = async () => {
+    setStartingBackend(true)
 
-  try {
-    // Check if module3 is running via health check
-    const response = await fetch('/module3/api/health');
-    
-    if (response.ok) {
-      setBackendRunning(true);
-      setStartingBackend(false);
-      setCurrentStep(1);
-      setIsGenerating(true);
-      setLoading(true);
-      setPerspectives([]);
-      setFinalOutput(null);
-      setShowGraph(false);
-      setAutoAdvanceTriggered(false);
+    try {
+      const response = await fetch('/module3/api/health')
+      
+      if (response.ok) {
+        setBackendRunning(true)
+        setStartingBackend(false)
+        setCurrentStep(1)
+        setIsGenerating(true)
+        setLoading(true)
+        setPerspectives([])
+        setFinalOutput(null)
+        setShowGraph(false)
+        setShowOutputGraph(false)
+        setAutoAdvanceTriggered(false)
 
-      await startPerspectiveGeneration();
-    } else {
-      alert('Module3 backend is not running. Please start it using start-module3.bat');
-      setStartingBackend(false);
+        await startPerspectiveGeneration()
+      } else {
+        console.error('[Module3] Backend not responding')
+        setStartingBackend(false)
+      }
+
+    } catch (error) {
+      console.error('[Module3] Error starting module3:', error)
+      setStartingBackend(false)
     }
-
-  } catch (error: any) {
-    alert('Module3 backend is not running. Please start it using start-module3.bat');
-    setStartingBackend(false);
   }
-};
 
 
 
@@ -335,6 +500,9 @@ const startModule3 = async () => {
       // Setup event listeners BEFORE starting pipeline
       setupEventListeners()
       
+      // Start status polling
+      startStatusPolling()
+      
       // Start the pipeline
       const response = await fetch("/module3/api/run_pipeline_stream", {
         method: "POST",
@@ -344,10 +512,14 @@ const startModule3 = async () => {
         throw new Error('Failed to start pipeline')
       }
       
-          } catch (error) {
+    } catch (error) {
       console.error("Error starting pipeline:", error)
       setLoading(false)
       setIsGenerating(false)
+      if (statusPollingRef.current) {
+        clearInterval(statusPollingRef.current)
+        statusPollingRef.current = null
+      }
     }
   }
 
@@ -389,10 +561,17 @@ const startModule3 = async () => {
         const data = JSON.parse(event.data)
         
         if (data.type === 'complete') {
+          console.log('[SSE] Pipeline complete signal received')
                     
           // Close event sources
           batchEventSource.close()
           completeEventSource.close()
+          
+          // Stop status polling
+          if (statusPollingRef.current) {
+            clearInterval(statusPollingRef.current)
+            statusPollingRef.current = null
+          }
           
           setIsGenerating(false)
           setLoading(false)
@@ -422,18 +601,23 @@ const startModule3 = async () => {
                   const clusteredOutput = { leftist, common, rightist }
                   setFinalOutput(clusteredOutput)
                   
-                  // Save to cache
+                  // Save to cache and session
                   if (currentInputHash) {
                     savePerspectivesToCache(
                       currentInputHash,
                       allPerspectives,
                       clusteredOutput
                     )
+                    saveModule3Data({
+                      perspectives: allPerspectives,
+                      finalOutput: clusteredOutput,
+                      inputHash: currentInputHash
+                    })
                     setIsFromCache(true)
                   }
                 }
               } catch (error) {
-                console.error('Error fetching final output from backend:', error)
+                console.error('[Module3] Error fetching final output from backend:', error)
               }
               
               // Move to Step 2 (Visualisation) and show graph
@@ -487,21 +671,44 @@ const startModule3 = async () => {
       status="ready"
     >
       <div className="space-y-12">
-        {/* Backend Control & Cache Status */}
+        {/* Status Overview */}
         <div className="border border-white/10 rounded p-6 space-y-4">
-          {/* Backend Status */}
+          {/* Backend & Processing Status */}
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-6">
+              {/* Backend Status */}
+              <div className="flex items-center gap-3">
                 <div className={`w-2 h-2 rounded-full ${backendRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-sm text-white/70">
-                  Backend: {backendRunning ? 'Running' : 'Not Running'}
-                </span>
+                <div>
+                  <span className="text-sm text-white/70">Backend</span>
+                  <p className="text-xs text-white/40">{backendRunning ? 'Running' : 'Offline'}</p>
+                </div>
               </div>
-              {!backendRunning && (
-                <p className="text-xs text-white/40">Run start-module3.bat to start the backend</p>
+
+              {/* Processing Status */}
+              {isGenerating && (
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <div>
+                    <span className="text-sm text-white/70">Generating</span>
+                    <p className="text-xs text-white/40">{perspectives.length} perspectives</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Cache Status */}
+              {isFromCache && (
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <div>
+                    <span className="text-sm text-white/70">Cached</span>
+                    <p className="text-xs text-white/40">Instant load</p>
+                  </div>
+                </div>
               )}
             </div>
+
+            {/* Action Buttons */}
             <div className="flex items-center gap-3">
               {!backendRunning && (
                 <button
@@ -511,75 +718,37 @@ const startModule3 = async () => {
                   Refresh Status
                 </button>
               )}
-              {backendRunning && currentStep === 0 && !isGenerating && (
-                <button
-                  onClick={startModule3}
-                  disabled={startingBackend || isGenerating}
-                  className="px-4 py-2 border border-green-500/30 rounded text-sm text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-50"
-                >
-                  {startingBackend ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-3 h-3 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
-                      Checking...
-                    </span>
-                  ) : (
-                    'Begin Generation'
-                  )}
-                </button>
-              )}
-              {backendRunning && (currentStep > 0 || isGenerating) && (
-                <button
-                  onClick={() => {
-                    setCurrentStep(0)
-                    setIsGenerating(false)
-                    setLoading(false)
-                    setPerspectives([])
-                    setFinalOutput(null)
-                    setShowGraph(false)
-                  }}
-                  className="px-4 py-2 border border-red-500/30 rounded text-sm text-red-400 hover:bg-red-500/10 transition-all"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Cache Status */}
-          {currentInputHash && (
-            <div className="flex items-center justify-between pt-4 border-t border-white/10">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-2 h-2 rounded-full ${isFromCache ? 'bg-blue-500' : 'bg-white/30'}`} />
-                  <span className="text-sm text-white/70">
-                    Cache: {isFromCache ? 'Using Cached Data' : 'No Cache'}
-                  </span>
-                </div>
-                <p className="text-xs text-white/40">
-                  {isFromCache 
-                    ? 'Perspectives loaded from cache. Switch pages freely!'
-                    : 'Generate perspectives to cache for quick access'
-                  }
-                </p>
-              </div>
               {isFromCache && (
                 <button
                   onClick={() => {
-                    if (confirm('Clear cache and regenerate perspectives?')) {
+                    if (confirm('Clear cache and force regenerate?')) {
                       clearCacheForHash(currentInputHash)
                       setPerspectives([])
                       setFinalOutput(null)
                       setIsFromCache(false)
                       setCurrentStep(0)
                       setShowGraph(false)
+                      setShowOutputGraph(false)
                       setAutoAdvanceTriggered(false)
-                                          }
+                      if (backendRunning) {
+                        checkBackendStatusAndResume()
+                      }
+                    }
                   }}
                   className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
                 >
                   Force Regenerate
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Help Text */}
+          {!backendRunning && (
+            <div className="pt-4 border-t border-white/10">
+              <p className="text-xs text-white/40">
+                Backend not running. Module 3 is triggered automatically by Module 2. If you need to start it manually, run <code className="text-white/60 bg-white/5 px-1 py-0.5 rounded">start-module3.bat</code>
+              </p>
             </div>
           )}
         </div>
