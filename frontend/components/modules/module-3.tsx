@@ -48,6 +48,8 @@ export function Module3() {
   const [showClusteringDetails, setShowClusteringDetails] = useState(false)
   const [autoAdvanceTriggered, setAutoAdvanceTriggered] = useState(false)
   const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
+  const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -281,6 +283,34 @@ export function Module3() {
       }
     }
   }, [currentStep, perspectives.length, autoAdvanceTriggered])
+
+  // Redirect countdown to Module 4 after output is shown
+  useEffect(() => {
+    if (currentStep === 3 && finalOutput && showOutputGraph && redirectCountdown === null) {
+      setRedirectCountdown(5)
+      
+      redirectTimerRef.current = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            if (redirectTimerRef.current) {
+              clearInterval(redirectTimerRef.current)
+              redirectTimerRef.current = null
+            }
+            window.location.href = "/modules/4"
+            return null
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    
+    return () => {
+      if (redirectTimerRef.current) {
+        clearInterval(redirectTimerRef.current)
+        redirectTimerRef.current = null
+      }
+    }
+  }, [currentStep, finalOutput, showOutputGraph, redirectCountdown])
 
   useEffect(() => {
     if (currentStep !== 3 && showClusteringDetails) {
@@ -1074,7 +1104,18 @@ export function Module3() {
               </div>
               {finalOutput ? (
                 <div className="space-y-6">
-                  <div className="text-xs text-white/40 mb-4">Three JSON files ready for Module 4</div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-xs text-white/40">Three JSON files ready for Module 4</div>
+                    {redirectCountdown !== null && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded text-blue-400 text-xs">
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Advancing to Module 4 in {redirectCountdown}s...</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="p-5 border border-red-500/20 bg-red-500/5 rounded">
                       <div className="text-xs text-red-400/70 mb-2 uppercase tracking-wider">Leftist</div>

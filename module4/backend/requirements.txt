@@ -1,0 +1,9 @@
+google-generativeai
+fastapi
+uvicorn
+requests
+httpx
+pydantic
+google-api-python-client
+selenium
+webdriver-manager

@@ -223,12 +223,13 @@ async def get_module2_output():
 async def process_module1_output():
     """
     Process Module 1's output:
-    1. Read Module 1 output and input
-    2. Classify the information
-    3. Calculate significance score (inverse of confidence)
-    4. Generate comprehensive summary
-    5. Save detailed output to output.json
-    6. Save simplified data to Module 3's input.json
+    1. Clear old Module 2 output
+    2. Read Module 1 output and input
+    3. Classify the information
+    4. Calculate significance score (inverse of confidence)
+    5. Generate comprehensive summary
+    6. Save detailed output to output.json
+    7. Save simplified data to Module 3's input.json
     
     Returns:
         Module2Output with detailed analysis
@@ -237,6 +238,15 @@ async def process_module1_output():
         HTTPException: If processing fails
     """
     try:
+        # Clear old output files first
+        if MODULE2_OUTPUT_PATH.exists():
+            print(f"Clearing old Module 2 output: {MODULE2_OUTPUT_PATH}")
+            MODULE2_OUTPUT_PATH.unlink()
+        
+        if MODULE3_INPUT_PATH.exists():
+            print(f"Clearing old Module 3 input: {MODULE3_INPUT_PATH}")
+            MODULE3_INPUT_PATH.unlink()
+        
         # Read Module 1 output
         if not MODULE1_OUTPUT_PATH.exists():
             raise HTTPException(status_code=404, detail="Module 1 output not found. Please run Module 1 analysis first.")
@@ -251,18 +261,40 @@ async def process_module1_output():
         with open(MODULE1_INPUT_PATH, 'r', encoding='utf-8') as f:
             module1_input = json.load(f)
         
-        original_text = module1_input.get('text', '') or module1_input.get('url', '')
+        # Try multiple keys for text content
+        original_text = (
+            module1_input.get('text') or 
+            module1_input.get('url') or 
+            module1_input.get('content') or
+            module1_input.get('scraped_text') or
+            ''
+        )
         
-        if not original_text:
-            raise HTTPException(status_code=400, detail="No text found in Module 1 input")
+        if not original_text or not original_text.strip():
+            # Try to get text from module1_output if available
+            original_text = (
+                module1_output.get('scraped_text') or
+                module1_output.get('extracted_text') or
+                module1_output.get('ai_reasoning') or
+                ''
+            )
+        
+        if not original_text or not original_text.strip():
+            raise HTTPException(
+                status_code=400, 
+                detail="No text content found in Module 1 input or output. Please provide valid text content for analysis."
+            )
         
         # Extract Module 1 data
         confidence = module1_output.get('confidence', 0.5)
         risk_level = module1_output.get('risk_level', 'unknown')
         threats = module1_output.get('threats', [])
         
+        print(f"[Module2] Processing text ({len(original_text)} chars)")
+        print(f"[Module2] Module 1 confidence: {confidence}, risk: {risk_level}, threats: {len(threats)}")
+        
         # Classify the information using AI
-        print(f"Classifying: {original_text[:100]}...")
+        print(f"[Module2] Classifying: {original_text[:100]}...")
         try:
             classification_result = classifier.classify(original_text)
         except Exception as e:
@@ -285,7 +317,7 @@ async def process_module1_output():
         )
         
         # Generate comprehensive summary
-        print("Generating summary...")
+        print("[Module2] Generating summary...")
         try:
             summary_result = summarizer.summarize(original_text)
         except Exception as e:
@@ -358,16 +390,19 @@ async def process_module1_output():
         with open(MODULE3_INPUT_PATH, 'w', encoding='utf-8') as f:
             json.dump(module3_input.dict(), f, indent=2, ensure_ascii=False)
         
-        print(f"Module 2 processing complete. Significance score: {significance_score}/100 ({significance_score/100.0:.2f})")
-        print(f"Debate required: {requires_debate} (Priority: {debate_priority})")
-        print(f"Module 3 input saved to: {MODULE3_INPUT_PATH}")
+        print(f"[Module2] Processing complete. Significance score: {significance_score}/100 ({significance_score/100.0:.2f})")
+        print(f"[Module2] Debate required: {requires_debate} (Priority: {debate_priority})")
+        print(f"[Module2] Module 3 input saved to: {MODULE3_INPUT_PATH}")
+        print(f"[Module2] Module 2 output saved to: {MODULE2_OUTPUT_PATH}")
         
         return module2_output
         
-    except HTTPException:
+    except HTTPException as he:
+        print(f"[Module2 ERROR] HTTP {he.status_code}: {he.detail}")
         raise
     except Exception as e:
         import traceback
+        print(f"[Module2 ERROR] Unexpected error: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 

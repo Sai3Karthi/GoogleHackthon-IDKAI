@@ -1,0 +1,27 @@
+{
+  "search_engine_id": "c5e8f48ab8de141b4",
+  "links_per_text": 1,
+  "search_settings": {
+    "safe": "active",
+    "language": "en",
+    "country": "in"
+  },
+  "rate_limiting": {
+    "delay_between_requests": 3.0,
+    "max_retries": 3
+  },
+  "gemini_settings": {
+    "model": "gemini-2.0-flash",
+    "temperature": 0.2,
+    "relevance_threshold": 0.7,
+    "requests_per_minute": 35,
+    "wait_on_rate_limit": true
+  },
+  "module_references": {
+    "module1_config": "../module1/backend/config.json",
+    "module3_config": "../module3/backend/config.json",
+    "inherit_safety_settings": true,
+    "inherit_model_config": true,
+    "use_scam_keywords_for_relevance": true
+  }
+}

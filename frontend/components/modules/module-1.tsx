@@ -340,10 +340,20 @@ export function Module1() {
           </button>
         </div>
 
-        {/* Text/URL Analysis Input */}
         {analysisMode === "text" && (
           <div className="border border-white/10 rounded p-8">
             <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">Analyze Text or URL</h2>
+            
+            <div className="border border-blue-500/30 bg-blue-500/5 rounded-lg p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div className="text-sm text-blue-300 leading-relaxed">
+                  <strong>Processing Time Notice:</strong> Daily news and simple content analyze quickly. Complex or critical information may take longer to process through all modules, especially Module 4 enrichment which searches the web for verification.
+                </div>
+              </div>
+            </div>
             
             <div className="space-y-4">
               <textarea
@@ -382,13 +392,22 @@ export function Module1() {
           </div>
         )}
 
-        {/* Image Analysis Input */}
         {analysisMode === "image" && (
           <div className="border border-white/10 rounded p-8">
             <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">Analyze Image for Scams</h2>
             
+            <div className="border border-blue-500/30 bg-blue-500/5 rounded-lg p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div className="text-sm text-blue-300 leading-relaxed">
+                  <strong>Processing Time Notice:</strong> Daily news and simple content analyze quickly. Complex or critical information may take longer to process through all modules, especially Module 4 enrichment which searches the web for verification.
+                </div>
+              </div>
+            </div>
+            
             <div className="space-y-6">
-              {/* Upload or URL Toggle */}
               <div className="space-y-4">
                 <div className="text-white/40 text-xs mb-2">Upload Image or Provide URL:</div>
                 

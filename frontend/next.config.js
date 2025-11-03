@@ -25,6 +25,7 @@ if (isProduction && apiUrl) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone', // Enable standalone output for Docker
   images: {
     domains: ['localhost', '127.0.0.1'],
     remotePatterns: [
@@ -51,6 +52,10 @@ const nextConfig = {
       {
         source: '/module3/:path*',
         destination: `${orchestratorUrl}/module3/:path*`,
+      },
+      {
+        source: '/module4/:path*',
+        destination: `${orchestratorUrl}/module4/:path*`,
       },
       {
         source: '/run/:path*',

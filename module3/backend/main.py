@@ -262,6 +262,35 @@ async def run_pipeline_stream() -> JSONResponse:
             
             if all_files_exist:
                 logger.info("All three perspective files generated successfully")
+                
+                # Automatically send data to Module 4
+                try:
+                    logger.info("Sending perspective data to Module 4 backend...")
+                    module4_url = "https://idk-backend-382118575811.asia-south1.run.app"
+                    
+                    perspectives_data = {}
+                    for category in required_files:
+                        file_path = final_output_dir / category
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            perspectives_data[category.replace('.json', '')] = json.load(f)
+                    
+                    response = requests.post(
+                        f"{module4_url}/upload-perspectives",
+                        json={
+                            "common": perspectives_data.get("common"),
+                            "leftist": perspectives_data.get("leftist"),
+                            "rightist": perspectives_data.get("rightist")
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        logger.info("Successfully sent perspective data to Module 4")
+                    else:
+                        logger.warning(f"Module 4 returned status {response.status_code}: {response.text}")
+                except Exception as e:
+                    logger.warning(f"Failed to send data to Module 4 (non-critical): {e}")
             else:
                 logger.warning("Some required files are missing")
                 
@@ -428,6 +457,105 @@ async def get_module3_output(category: str) -> JSONResponse:
         logger.error(f"File read error for {category}: {e}")
         return JSONResponse(
             {"error": f"File read error: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/send_to_module4")
+async def send_to_module4() -> JSONResponse:
+    """Send perspective files to Module 4 backend for debate analysis.
+    
+    Reads the three perspective files from final_output directory,
+    transforms them to the format Module 4 expects,
+    and POSTs them to Module 4 backend.
+    
+    Returns:
+        JSONResponse with status of data transfer
+    """
+    try:
+        base_dir = Path(__file__).parent
+        final_output_dir = base_dir / "final_output"
+        
+        required_files = ["leftist.json", "rightist.json", "common.json"]
+        for filename in required_files:
+            file_path = final_output_dir / filename
+            if not file_path.exists():
+                logger.error(f"Missing required file: {filename}")
+                return JSONResponse(
+                    {"error": f"Missing required file: {filename}. Run pipeline first."},
+                    status_code=404
+                )
+        
+        perspectives_data = {}
+        for category in required_files:
+            file_path = final_output_dir / category
+            with open(file_path, 'r', encoding='utf-8') as f:
+                perspectives_data[category.replace('.json', '')] = json.load(f)
+        
+        logger.info("Successfully loaded all three perspective files")
+        
+        # Load input.json data as well
+        input_data = None
+        input_file = base_dir / "input.json"
+        if input_file.exists():
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    input_data = json.load(f)
+                logger.info(f"Loaded input data: {input_data.get('topic', 'Unknown')}")
+            except Exception as e:
+                logger.warning(f"Failed to load input.json: {e}")
+        
+        # Get Module 4 URL from config
+        if config:
+            module4_url = config.get_module4_url()
+        else:
+            module4_url = "http://127.0.0.1:8004"
+        
+        logger.info(f"Sending data to Module 4 at: {module4_url}")
+        
+        payload = {
+            "common": perspectives_data.get("common"),
+            "leftist": perspectives_data.get("leftist"),
+            "rightist": perspectives_data.get("rightist")
+        }
+        
+        # Add input data if available
+        if input_data:
+            payload["input"] = input_data
+        
+        response = requests.post(
+            f"{module4_url}/upload-perspectives",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            logger.info("Successfully sent perspective data to Module 4 backend")
+            return JSONResponse({
+                "status": "success",
+                "message": "Perspective data sent to Module 4 successfully",
+                "module4_response": response.json()
+            })
+        else:
+            logger.error(f"Module 4 backend returned error: {response.status_code}")
+            return JSONResponse(
+                {
+                    "error": f"Module 4 backend error: {response.status_code}",
+                    "details": response.text
+                },
+                status_code=502
+            )
+            
+    except requests.RequestException as e:
+        logger.error(f"Failed to connect to Module 4 backend: {e}")
+        return JSONResponse(
+            {"error": f"Failed to connect to Module 4 backend: {str(e)}"},
+            status_code=503
+        )
+    except Exception as e:
+        logger.error(f"Error sending data to Module 4: {e}", exc_info=True)
+        return JSONResponse(
+            {"error": f"Internal server error: {str(e)}"},
             status_code=500
         )
 

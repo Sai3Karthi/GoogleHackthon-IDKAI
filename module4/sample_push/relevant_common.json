@@ -1,0 +1,50 @@
+{
+  "topic": "President Donald Trump delivered a \"cryptic warning\" to Chinese President Xi Jinping regarding the \"consequences\" of a potential invasion of Taiwan, a self-governing island that China claims as its te...",
+  "source_file": "common.json",
+  "processed_at": "2025-11-03T07:25:36.947547",
+  "total_items": 3,
+  "items": [
+    {
+      "text": "This is likely a strategic move to reinforce the credibility of US security guarantees to allies in the region.",
+      "bias_x": 0.4643,
+      "significance_y": 0.8,
+      "combined_score": 0.3714,
+      "color": "green",
+      "relevant_links": [
+        {
+          "title": "If Trump convinces China to abandon force against Taiwan he ...\nwww.reuters.com › world › china › ch",
+          "link": "https://www.reuters.com/world/china/china-takeover-taiwan-would-threaten-us-too-taiwan-president-says-2025-10-07/",
+          "snippet": "",
+          "trust_score": 0.9,
+          "source_type": "News Organization",
+          "extracted_content": "Content could not be extracted"
+        }
+      ]
+    },
+    {
+      "text": "The warning is likely intended to deter China by making the cost of invasion unacceptably high and unpredictable.",
+      "bias_x": 0.5357,
+      "significance_y": 0.7,
+      "combined_score": 0.375,
+      "color": "green",
+      "relevant_links": []
+    },
+    {
+      "text": "The wording suggests a deliberate attempt to keep China guessing about the nature and scope of potential US responses.",
+      "bias_x": 0.5,
+      "significance_y": 0.6,
+      "combined_score": 0.3,
+      "color": "green",
+      "relevant_links": [
+        {
+          "title": "Trump says Xi understands 'consequences' if China invades Taiwan\nwww.news.com.au › World › North-ame",
+          "link": "https://www.news.com.au/world/north-america/us-politics/trump-says-xi-understands-consequences-if-china-invades-taiwan/news-story/6c976f2c2805f7ffc0401a81e6251e11",
+          "snippet": "",
+          "trust_score": 0.7,
+          "source_type": "News Organization",
+          "extracted_content": "Deals of the Week 7:25am Monday, November 3rd, 2025 In the know quiz Sydney 18 °/ 28 ° Sign Up Log In World North America Us Politics Trump says Xi understands ‘consequences’ if China invades Taiwan US President Donald Trump has made several big claims in a new TV interview set to air in the US. AFP less than 2 min read November 3, 2025 - 4:33AM Listen to this article 1 min South Korea's Lee asks China's Xi for help engaging the North South Korean President Lee Jae Myung sought Chinese President Xi Jinping's help in efforts to resume... more US President Donald Trump said Xi Jinping understands the consequences if China invades Taiwan, while refusing to specifically say the US would defend the island, according to an extract of a CBS News interview broadcast Sunday. Mr Trump said Taiwan “never even came up as a subject” when he met the Chinese president in South Korea on Thursday for their first face-to-face meeting in six years. Asked on CBS’s “60 Minutes” whether he would order US forces into action if China moved militarily on Taiwan, Mr Trump said: “You’ll find out if it happens, and he understands the answer to that.” But Mr Trump declined to spell out what he meant in the interview conducted Friday at his Mar-a-Lago resort in Florida, adding: “I can’t give away my secrets. The other side knows.” The US president claimed that Mr Jinping and those close to him had “openly said” that “’we would never do anything while President Trump is president,’ because they know the consequences.” China claims self-governing Taiwan as its territory. Under longstanding policy, the US recognises only Beijing but provides weapons for the island’s self-defence. The issue continues to provoke tensions, which Mr Trump and Mr Jinping appeared to have avoided at their summit, focusing instead on easing the trade war between Washington and Beijing. Read More Read next SPONSORED Looking for More Content? We May Have What You Want DISCOVERYFEED ‘Enough!’: Exasperated crew shuts down TV show ENTERTAINMENT ‘No way she’s 25’: Porn star’s age horrifies LIFESTYLE The Sydney Sweeney backlash only proves her point LIFESTYLE Andrew had ‘40 prostitutes’ delivered to Thailand hotel during ‘midlife crisis’ trip, historian claims ENTERTAINMENT Gas to be banned in major Aussie city NATIONAL Charles’ ‘secret son’ makes astonishing claim ENTERTAINMENT Sign Up Log In Sign Up Registration Connect In The Know Quiz Newsletters Competitions About Us Welcome to news.com.au The Team Our Values Code of Conduct Shopping Help And Support Contact us FAQ General Feedback Advertise with us Standards of Practice Site Map Licensing & Reprints Our News Network Kids News The Daily Telegraph Herald Sun The Courier Mail Our Partners Tubi Kidspot Body+Soul realestate.com.au FoxSports CODE Sports Our Apps A NOTE ABOUT RELEVANT ADVERTISING: We collect information about the content (including ads) you use across this site and use it to make both advertising and content more relevant to you on our network and other sites. Find out more about our policy and your choices, including how to opt-out.Sometimes our articles will try to help you find the right product at the right price. We may receive payment from third parties for publishing this content or when you make a purchase through the links on our sites. Privacy policy Relevant ads opt-out Cookie policy Terms of use Nationwide News Pty Ltd © 2025. All times AEDT (GMT +11). Powered by WordPress.com VIP"
+        }
+      ]
+    }
+  ]
+}

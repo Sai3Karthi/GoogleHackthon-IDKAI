@@ -23,6 +23,11 @@ MODULES = {
         "host": config.get_module3_host(),
         "port": config.get_module3_port(),
         "description": "Perspective Generation API"
+    },
+    "module4": {
+        "host": config.get_module4_host(),
+        "port": config.get_module4_port(),
+        "description": "Agent Debate & Analysis API"
     }
 }
 
@@ -93,20 +98,25 @@ async def proxy_request(module_name: str, path: str, request: Request):
         )
 
     mod_config = MODULES[module_name]
-    target_url = f"http://{mod_config['host']}:{mod_config['port']}/{path}"
+    
+    # Use HTTPS for external Cloud Run services
+    protocol = "https" if mod_config.get("use_https", False) else "http"
+    port_suffix = "" if mod_config.get("use_https", False) else f":{mod_config['port']}"
+    target_url = f"{protocol}://{mod_config['host']}{port_suffix}/{path}"
 
     body = await request.body()
     headers = dict(request.headers)
-    headers["host"] = f"{mod_config['host']}:{mod_config['port']}"
+    headers["host"] = mod_config['host']
 
-    async with httpx.AsyncClient() as client:
+    timeout_config = httpx.Timeout(None)
+
+    async with httpx.AsyncClient(timeout=timeout_config) as client:
         try:
             response = await client.request(
                 method=request.method,
                 url=target_url,
                 content=body,
                 headers=headers,
-                timeout=30.0,
             )
 
             response_content = await response.aread()

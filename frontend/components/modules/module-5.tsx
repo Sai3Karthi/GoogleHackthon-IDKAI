@@ -20,6 +20,49 @@ interface Module1Output {
   extracted_text?: string
 }
 
+interface Module2Output {
+  detected_language?: string
+  languages?: { [key: string]: number }
+  sentiment?: string
+  emotion?: string
+  key_entities?: string[]
+  summary?: string
+  topics?: string[]
+}
+
+interface Module3Perspective {
+  text: string
+  bias_x: number
+  significance_y: number
+}
+
+interface Module3Output {
+  leftist?: Module3Perspective[]
+  rightist?: Module3Perspective[]
+  common?: Module3Perspective[]
+}
+
+interface Module4Output {
+  status?: string
+  trust_score?: number
+  judgment?: string
+  final_verdict?: {
+    trust_score?: number
+    reasoning?: string
+    recommendation?: string
+  }
+}
+
+interface ComprehensiveAnalysis {
+  module1: Module1Output | null
+  module2: Module2Output | null
+  module3: Module3Output | null
+  module4: Module4Output | null
+  summary: string
+  keyLearnings: string[]
+  contentType: string
+}
+
 export function Module5() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -27,11 +70,12 @@ export function Module5() {
   const skipReason = searchParams?.get("skip_reason")
   
   const [output, setOutput] = useState<Module1Output | null>(null)
+  const [comprehensiveAnalysis, setComprehensiveAnalysis] = useState<ComprehensiveAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadOutputData()
+    loadComprehensiveData()
   }, [])
 
   const startNewSession = () => {
@@ -48,21 +92,157 @@ export function Module5() {
     }
   }
 
-  const loadOutputData = async () => {
+  const loadComprehensiveData = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/module1/api/output")
       
-      if (!response.ok) {
-        throw new Error("No analysis data available")
+      // Fetch data from all modules
+      const [module1Res, module2Res, module3Res, module4Res] = await Promise.allSettled([
+        fetch("/module1/api/output"),
+        fetch("/module2/api/output"),
+        fetch("/module3/api/output"),
+        fetch("/module4/api/debate")
+      ])
+      
+      const module1Data = module1Res.status === 'fulfilled' && module1Res.value.ok 
+        ? await module1Res.value.json() 
+        : null
+      const module2Data = module2Res.status === 'fulfilled' && module2Res.value.ok 
+        ? await module2Res.value.json() 
+        : null
+      const module3Data = module3Res.status === 'fulfilled' && module3Res.value.ok 
+        ? await module3Res.value.json() 
+        : null
+      const module4Data = module4Res.status === 'fulfilled' && module4Res.value.ok 
+        ? await module4Res.value.json() 
+        : null
+      
+      if (!module1Data) {
+        throw new Error("No analysis data available from Module 1")
       }
       
-      const data = await response.json()
-      setOutput(data)
+      setOutput(module1Data)
+      
+      // Generate comprehensive analysis
+      const analysis = generateComprehensiveAnalysis(
+        module1Data,
+        module2Data,
+        module3Data,
+        module4Data
+      )
+      
+      setComprehensiveAnalysis(analysis)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data")
     } finally {
       setLoading(false)
+    }
+  }
+  
+  const generateComprehensiveAnalysis = (
+    m1: Module1Output | null,
+    m2: Module2Output | null,
+    m3: Module3Output | null,
+    m4: Module4Output | null
+  ): ComprehensiveAnalysis => {
+    const keyLearnings: string[] = []
+    let summary = ""
+    let contentType = m1?.input_type || "unknown"
+    
+    // Module 1 Analysis
+    if (m1) {
+      summary += `This ${contentType} content was analyzed for safety and identified as ${m1.risk_level.toUpperCase()} with ${Math.round(m1.confidence * 100)}% confidence. `
+      
+      if (m1.threats.length > 0) {
+        summary += `Detected threats include: ${m1.threats.join(", ")}. `
+        keyLearnings.push(`Be aware of ${m1.threats.length} security threat(s) detected in this content`)
+      }
+      
+      if (m1.risk_level === "dangerous") {
+        keyLearnings.push("CRITICAL: This content is malicious. Do not interact with it or share personal information")
+      } else if (m1.risk_level === "suspicious") {
+        keyLearnings.push("CAUTION: Verify this content through independent sources before trusting it")
+      } else {
+        keyLearnings.push("This content appears safe, but always maintain healthy skepticism online")
+      }
+    }
+    
+    // Module 2 Analysis
+    if (m2) {
+      if (m2.sentiment) {
+        summary += `The content exhibits ${m2.sentiment} sentiment${m2.emotion ? ` with ${m2.emotion} emotional tone` : ''}. `
+        keyLearnings.push(`Emotional manipulation check: Content shows ${m2.sentiment} tone, which ${m2.sentiment === 'negative' ? 'may be used to create urgency or fear' : 'should be evaluated for authenticity'}`)
+      }
+      
+      if (m2.key_entities && m2.key_entities.length > 0) {
+        summary += `Key entities mentioned: ${m2.key_entities.slice(0, 5).join(", ")}. `
+        keyLearnings.push(`Research these key topics independently: ${m2.key_entities.slice(0, 3).join(", ")}`)
+      }
+      
+      if (m2.topics && m2.topics.length > 0) {
+        keyLearnings.push(`Main themes to verify: ${m2.topics.slice(0, 3).join(", ")}`)
+      }
+    }
+    
+    // Module 3 Analysis
+    if (m3) {
+      const totalPerspectives = (m3.leftist?.length || 0) + (m3.rightist?.length || 0) + (m3.common?.length || 0)
+      
+      if (totalPerspectives > 0) {
+        summary += `Bias analysis identified ${totalPerspectives} different perspectives on this content. `
+        
+        if (m3.leftist && m3.leftist.length > 0) {
+          keyLearnings.push(`${m3.leftist.length} left-leaning perspectives were identified in the content`)
+        }
+        if (m3.rightist && m3.rightist.length > 0) {
+          keyLearnings.push(`${m3.rightist.length} right-leaning perspectives were identified in the content`)
+        }
+        if (m3.common && m3.common.length > 0) {
+          keyLearnings.push(`${m3.common.length} politically neutral perspectives were found`)
+        }
+        
+        keyLearnings.push("Understanding bias helps you recognize how content may influence your opinions")
+      }
+    }
+    
+    // Module 4 Analysis
+    if (m4 && m4.status === 'completed') {
+      const trustScore = m4.trust_score || m4.final_verdict?.trust_score
+      
+      if (trustScore !== undefined) {
+        summary += `AI debate analysis resulted in a trust score of ${trustScore}/10. `
+        
+        if (trustScore >= 7) {
+          keyLearnings.push(`High trust score (${trustScore}/10) indicates reliable information with supporting evidence`)
+        } else if (trustScore >= 4) {
+          keyLearnings.push(`Moderate trust score (${trustScore}/10) suggests mixed evidence. Cross-reference with trusted sources`)
+        } else {
+          keyLearnings.push(`Low trust score (${trustScore}/10) indicates questionable or unverified claims`)
+        }
+      }
+      
+      if (m4.final_verdict?.reasoning) {
+        keyLearnings.push("AI agents debated this content from multiple perspectives to provide balanced analysis")
+      }
+    }
+    
+    // General learning
+    keyLearnings.push("Always verify important information through multiple independent and trusted sources")
+    keyLearnings.push("Question the source: Who created this content and what might their motivations be?")
+    keyLearnings.push("Check for evidence: Does the content provide verifiable facts or just opinions?")
+    
+    if (!summary) {
+      summary = "Analysis data is being processed. Please ensure all modules have completed their analysis."
+    }
+    
+    return {
+      module1: m1,
+      module2: m2,
+      module3: m3,
+      module4: m4,
+      summary,
+      keyLearnings,
+      contentType
     }
   }
 
@@ -135,8 +315,44 @@ export function Module5() {
           </div>
         )}
 
-        {output && (
+        {output && comprehensiveAnalysis && (
           <>
+            {/* Comprehensive Summary */}
+            <div className="border border-purple-500/30 bg-purple-500/5 rounded-lg p-8">
+              <h2 className="text-base font-light text-purple-400 mb-6 tracking-wide flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Complete Analysis Summary
+              </h2>
+              <p className="text-white/70 text-sm leading-relaxed">
+                {comprehensiveAnalysis.summary}
+              </p>
+            </div>
+
+            {/* Key Learnings */}
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded-lg p-8">
+              <h2 className="text-base font-light text-cyan-400 mb-6 tracking-wide flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+                What You Should Learn From This
+              </h2>
+              <div className="space-y-3">
+                {comprehensiveAnalysis.keyLearnings.map((learning, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex items-start gap-3 p-3 bg-white/5 rounded border border-white/10 hover:border-cyan-500/30 transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-cyan-400 text-xs font-bold">{idx + 1}</span>
+                    </div>
+                    <p className="text-white/70 text-sm leading-relaxed flex-1">{learning}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Final Verdict */}
             <div className={`border rounded p-8 ${getRiskBorderColor(output.risk_level)}`}>
               <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
@@ -178,11 +394,124 @@ export function Module5() {
               </div>
             </div>
 
+            {/* Multi-Module Analysis Details */}
+            {comprehensiveAnalysis.module2 && (
+              <div className="border border-white/10 rounded-lg p-8">
+                <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
+                  Language & Sentiment Analysis
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {comprehensiveAnalysis.module2.sentiment && (
+                    <div className="border border-white/10 rounded-lg p-4">
+                      <div className="text-xs text-white/50 mb-2">Overall Sentiment</div>
+                      <div className="text-lg font-medium text-white/80 capitalize">
+                        {comprehensiveAnalysis.module2.sentiment}
+                      </div>
+                    </div>
+                  )}
+                  {comprehensiveAnalysis.module2.emotion && (
+                    <div className="border border-white/10 rounded-lg p-4">
+                      <div className="text-xs text-white/50 mb-2">Emotional Tone</div>
+                      <div className="text-lg font-medium text-white/80 capitalize">
+                        {comprehensiveAnalysis.module2.emotion}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {comprehensiveAnalysis.module2.summary && (
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className="text-xs text-white/50 mb-2">Content Summary</div>
+                    <p className="text-white/70 text-sm leading-relaxed">
+                      {comprehensiveAnalysis.module2.summary}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Perspective Analysis */}
+            {comprehensiveAnalysis.module3 && (
+              <div className="border border-white/10 rounded-lg p-8">
+                <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
+                  Bias & Perspective Analysis
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {comprehensiveAnalysis.module3.leftist && comprehensiveAnalysis.module3.leftist.length > 0 && (
+                    <div className="border border-red-500/30 bg-red-500/5 rounded-lg p-4">
+                      <div className="text-xs text-red-400 mb-2">Left-Leaning Views</div>
+                      <div className="text-2xl font-bold text-red-400">
+                        {comprehensiveAnalysis.module3.leftist.length}
+                      </div>
+                      <div className="text-xs text-white/50 mt-1">perspectives identified</div>
+                    </div>
+                  )}
+                  {comprehensiveAnalysis.module3.rightist && comprehensiveAnalysis.module3.rightist.length > 0 && (
+                    <div className="border border-blue-500/30 bg-blue-500/5 rounded-lg p-4">
+                      <div className="text-xs text-blue-400 mb-2">Right-Leaning Views</div>
+                      <div className="text-2xl font-bold text-blue-400">
+                        {comprehensiveAnalysis.module3.rightist.length}
+                      </div>
+                      <div className="text-xs text-white/50 mt-1">perspectives identified</div>
+                    </div>
+                  )}
+                  {comprehensiveAnalysis.module3.common && comprehensiveAnalysis.module3.common.length > 0 && (
+                    <div className="border border-green-500/30 bg-green-500/5 rounded-lg p-4">
+                      <div className="text-xs text-green-400 mb-2">Neutral Views</div>
+                      <div className="text-2xl font-bold text-green-400">
+                        {comprehensiveAnalysis.module3.common.length}
+                      </div>
+                      <div className="text-xs text-white/50 mt-1">perspectives identified</div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-white/60 text-xs">
+                    Understanding different perspectives helps you recognize potential bias and form more balanced opinions.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Debate Trust Score */}
+            {comprehensiveAnalysis.module4 && comprehensiveAnalysis.module4.status === 'completed' && (
+              <div className="border border-white/10 rounded-lg p-8">
+                <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
+                  AI Debate Trust Assessment
+                </h2>
+                <div className="flex items-center gap-6 mb-4">
+                  <div className="flex-shrink-0">
+                    <div className="text-xs text-white/50 mb-2">Trust Score</div>
+                    <div className="text-4xl font-bold text-purple-400">
+                      {comprehensiveAnalysis.module4.trust_score || comprehensiveAnalysis.module4.final_verdict?.trust_score || 'N/A'}
+                      {(comprehensiveAnalysis.module4.trust_score || comprehensiveAnalysis.module4.final_verdict?.trust_score) && '/10'}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    {comprehensiveAnalysis.module4.final_verdict?.reasoning && (
+                      <p className="text-white/70 text-sm leading-relaxed">
+                        {comprehensiveAnalysis.module4.final_verdict.reasoning}
+                      </p>
+                    )}
+                    {comprehensiveAnalysis.module4.judgment && (
+                      <p className="text-white/70 text-sm leading-relaxed">
+                        {comprehensiveAnalysis.module4.judgment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-white/10">
+                  <p className="text-white/60 text-xs">
+                    AI agents debated this content from multiple perspectives with web-verified evidence to assess trustworthiness.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Detailed Analysis */}
             {output.ai_reasoning && (
               <div className="border border-white/10 rounded p-8">
                 <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
-                  AI Analysis
+                  Initial Security Analysis
                 </h2>
                 <p className="text-white/60 text-sm leading-relaxed whitespace-pre-wrap">
                   {output.ai_reasoning}

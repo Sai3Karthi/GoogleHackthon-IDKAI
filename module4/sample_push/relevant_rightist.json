@@ -1,0 +1,152 @@
+{
+  "topic": "President Donald Trump delivered a \"cryptic warning\" to Chinese President Xi Jinping regarding the \"consequences\" of a potential invasion of Taiwan, a self-governing island that China claims as its te...",
+  "source_file": "rightist.json",
+  "processed_at": "2025-11-03T07:24:29.378235",
+  "total_items": 9,
+  "items": [
+    {
+      "text": "This statement serves to strengthen the perception of the US as a reliable security partner for Taiwan.",
+      "bias_x": 0.5714,
+      "significance_y": 0.9,
+      "combined_score": 0.5143,
+      "color": "green",
+      "relevant_links": [
+        {
+          "title": "President Donald Trump Affirms U.S. Commitment to Defend Taiwan ...\nedebiyyatqazeti.az › news › proz",
+          "link": "https://edebiyyatqazeti.az/news/proza/532-edaleti-ve-azadligi-qadin-temsil-edir%3Fs-news-4494502-2025-11-02-president-donald-trump-reinforces-us-commitment-to-safeguard-taiwan-from-chinese-aggression",
+          "snippet": "",
+          "trust_score": 0.1,
+          "source_type": "News Organization",
+          "extracted_content": "Error extracting content: Message: timeout: Timed out receiving message from renderer: 13.614\n  (Session info: chrome=142.0.74"
+        }
+      ]
+    },
+    {
+      "text": "The world is watching, and Trump's firm stance reassures our allies that the US will stand by them.",
+      "bias_x": 0.7143,
+      "significance_y": 0.9,
+      "combined_score": 0.6429,
+      "color": "blue",
+      "relevant_links": [
+        {
+          "title": "If Trump convinces China to abandon force against Taiwan he ...\nwww.reuters.com › world › china › ch",
+          "link": "https://www.reuters.com/world/china/china-takeover-taiwan-would-threaten-us-too-taiwan-president-says-2025-10-07/",
+          "snippet": "",
+          "trust_score": 0.9,
+          "source_type": "News Organization",
+          "extracted_content": "Content could not be extracted"
+        }
+      ]
+    },
+    {
+      "text": "A strong, assertive stance from the US is the only thing that will deter a Chinese invasion of Taiwan.",
+      "bias_x": 0.8214,
+      "significance_y": 0.9,
+      "combined_score": 0.7393,
+      "color": "indigo",
+      "relevant_links": [
+        {
+          "title": "Trump claims China 'doesn't want to' invade Taiwan - POLITICO\nwww.politico.com › news › 2025/10/20 ›",
+          "link": "https://www.politico.com/news/2025/10/20/trump-claims-china-doesnt-want-to-invade-taiwan-00615508",
+          "snippet": "",
+          "trust_score": 0.85,
+          "source_type": "News Organization",
+          "extracted_content": "Error extracting content: Message: timeout: Timed out receiving message from renderer: 14.364\n  (Session info: chrome=142.0.74"
+        }
+      ]
+    },
+    {
+      "text": "This is a necessary show of strength to deter Chinese aggression and maintain stability in a vital region.",
+      "bias_x": 0.6071,
+      "significance_y": 0.8,
+      "combined_score": 0.4857,
+      "color": "blue",
+      "relevant_links": [
+        {
+          "title": "Trump can deter Chinese aggression against Taiwan — if he has ...\nthehill.com › opinion › internatio",
+          "link": "https://thehill.com/opinion/international/5008911-deterrence-china-taiwan-war/",
+          "snippet": "",
+          "trust_score": 0.7,
+          "source_type": "News Organization",
+          "extracted_content": "Error extracting content: Message: timeout: Timed out receiving message from renderer: 13.246\n  (Session info: chrome=142.0.74"
+        }
+      ]
+    },
+    {
+      "text": "Trump's 'cryptic warning' is a powerful demonstration of his 'America First' foreign policy, prioritizing national interests and security above all else.",
+      "bias_x": 0.75,
+      "significance_y": 0.8,
+      "combined_score": 0.6,
+      "color": "indigo",
+      "relevant_links": []
+    },
+    {
+      "text": "Such accusations are typical political rhetoric without substantial basis in fact.",
+      "bias_x": 1.0,
+      "significance_y": 0.8,
+      "combined_score": 0.8,
+      "color": "violet",
+      "relevant_links": [
+        {
+          "title": "Responding to Trump invasion comments, Taiwan says must rely on ...\nwww.reuters.com › world › china ",
+          "link": "https://www.reuters.com/world/china/responding-trump-invasion-comments-taiwan-says-must-rely-itself-security-2025-08-19/",
+          "snippet": "",
+          "trust_score": 0.95,
+          "source_type": "News Organization",
+          "extracted_content": "Content could not be extracted"
+        }
+      ]
+    },
+    {
+      "text": "Such accusations are typical political rhetoric without substantial basis in fact.",
+      "bias_x": 0.9643,
+      "significance_y": 0.7893,
+      "combined_score": 0.7611,
+      "color": "violet",
+      "relevant_links": [
+        {
+          "title": "If Trump convinces China to abandon force against Taiwan he ...\nwww.reuters.com › world › china › ch",
+          "link": "https://www.reuters.com/world/china/china-takeover-taiwan-would-threaten-us-too-taiwan-president-says-2025-10-07/",
+          "snippet": "",
+          "trust_score": 0.9,
+          "source_type": "News Organization",
+          "extracted_content": "Content could not be extracted"
+        }
+      ]
+    },
+    {
+      "text": "Such accusations are typical political rhetoric without substantial basis in fact.",
+      "bias_x": 0.9286,
+      "significance_y": 0.7786,
+      "combined_score": 0.723,
+      "color": "violet",
+      "relevant_links": [
+        {
+          "title": "Trump claims China 'doesn't want to' invade Taiwan - POLITICO\nwww.politico.com › news › 2025/10/20 ›",
+          "link": "https://www.politico.com/news/2025/10/20/trump-claims-china-doesnt-want-to-invade-taiwan-00615508",
+          "snippet": "",
+          "trust_score": 0.85,
+          "source_type": "News Organization",
+          "extracted_content": "Error extracting content: Message: timeout: Timed out receiving message from renderer: 14.990\n  (Session info: chrome=142.0.74"
+        }
+      ]
+    },
+    {
+      "text": "This warning is crucial for maintaining the balance of power in Asia and preventing a regional conflict.",
+      "bias_x": 0.6786,
+      "significance_y": 0.7,
+      "combined_score": 0.475,
+      "color": "blue",
+      "relevant_links": [
+        {
+          "title": "Trump says China 'doesn't want' to invade Taiwan and reaffirms trust ...\nwww.theguardian.com › oct ›",
+          "link": "https://www.theguardian.com/us-news/2025/oct/20/trump-china-taiwan-invasion-xi-jinping",
+          "snippet": "",
+          "trust_score": 0.9,
+          "source_type": "News Organization",
+          "extracted_content": "Skip to main content Skip to navigation Skip to navigation Support the Guardian Fund independent journalism with $15 per month Support us Sign in Int The Guardian - Back to home The Guardian News Opinion Sport World Europe US news Americas Asia Australia The Taipei skyline in Taiwan. Photograph: I-Hwa Cheng/AFP via Getty Images Donald Trump Agence France-Press in Washington Mon 20 Oct 2025 18.51 BST Last modified on Tue 21 Oct 2025 02.59 BST Share Donald Trump has expressed doubt on Monday that would invade Taiwan as he voiced confidence in his relationship with his Chinese counterpart, Xi Jinping, whom he will meet later this month. “I think we’ll be just fine with China. China doesn’t want to do that,” Trump told reporters as he met the Australian prime minister, Anthony Albanese. Speaking of Xi’s designs on Taiwan, Trump said: “Now that doesn’t mean it’s not the apple of his eye, because probably it is, but I don’t see anything happening.” Without explicitly saying he would authorize force to defend Taiwan, Trump said that China knows that the United States “is the strongest military power in the world by far”. Tension haunts tiny Taiwanese isles that live in fear of war with China Read more Trump’s predecessor Joe Biden repeatedly suggested he would order the US military to intervene if China moved on Taiwan. Donald Trump China Taiwan US politics Xi Jinping Share Most viewed World Europe US news Americas Asia Australia News Opinion Sport Sign up for our email About us Help Complaints & corrections Contact us Tip us off SecureDrop Privacy policy Cookie policy Tax strategy Terms & conditions All topics All writers Newsletters Digital newspaper archive Bluesky Facebook Instagram LinkedIn Threads TikTok YouTube"
+        }
+      ]
+    }
+  ]
+}

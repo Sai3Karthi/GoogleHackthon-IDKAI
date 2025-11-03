@@ -82,6 +82,20 @@ class Config:
         """Get module3 port only"""
         return self.config.getint('module3', 'port', fallback=8003)
     
+    def get_module4_url(self):
+        """Get full module4 URL"""
+        host = self.config.get('module4', 'host', fallback='127.0.0.1')
+        port = self.config.getint('module4', 'port', fallback=8004)
+        return f"http://{host}:{port}"
+    
+    def get_module4_host(self):
+        """Get module4 host only"""
+        return self.config.get('module4', 'host', fallback='127.0.0.1')
+    
+    def get_module4_port(self):
+        """Get module4 port only"""
+        return self.config.getint('module4', 'port', fallback=8004)
+    
     def get_frontend_url(self):
         """Get full frontend URL"""
         host = self.config.get('frontend', 'host', fallback='localhost')
@@ -116,4 +130,5 @@ if __name__ == "__main__":
     print(f"Module1 URL: {config.get_module1_url()}")
     print(f"Module2 URL: {config.get_module2_url()}")
     print(f"Module3 URL: {config.get_module3_url()}")
+    print(f"Module4 URL: {config.get_module4_url()}")
     print(f"Frontend URL: {config.get_frontend_url()}")

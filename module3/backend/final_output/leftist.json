@@ -3,36 +3,54 @@
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "This is a textbook example of how the ruling party uses disinformation to discredit any opposition voice and suppress dissent."
+        "text": "This is saber-rattling designed to boost Trump's domestic poll numbers by appearing tough on China."
     },
     {
         "color": "orange",
-        "bias_x": 0.1667,
+        "bias_x": 0.1786,
         "significance_y": 0.8,
-        "text": "The focus should be on the process of verifying election results, not on sensationalized claims that have not yet been substantiated."
+        "text": "The vagueness of the warning could lead to miscalculation by Beijing, which is a dangerous outcome."
     },
     {
         "color": "yellow",
-        "bias_x": 0.3333,
+        "bias_x": 0.3214,
         "significance_y": 0.8,
-        "text": "The claims, if true, would represent a significant threat to the integrity of Indian democracy and require immediate attention from the Election Commission."
+        "text": "The effectiveness of such a warning depends entirely on the credibility of the US military and its willingness to act."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.3929,
+        "significance_y": 0.7,
+        "text": "This could be an attempt to signal solidarity with Taiwan and reassure its government and people."
     },
     {
         "color": "red",
-        "bias_x": 0.0417,
+        "bias_x": 0.0357,
         "significance_y": 0.6,
-        "text": "The timing of this article, close to a major election, is highly suspicious and suggests a coordinated effort to influence voters."
+        "text": "The focus on a 'cryptic warning' is a distraction from the real issue: the US's history of intervention in other countries' affairs."
     },
     {
         "color": "orange",
-        "bias_x": 0.2083,
+        "bias_x": 0.2143,
         "significance_y": 0.6,
-        "text": "An independent, non-partisan body should be tasked with investigating any and all allegations of electoral irregularities to ensure public trust."
+        "text": "The international community needs to be consulted on such a serious warning, not just informed after the fact."
     },
     {
         "color": "yellow",
-        "bias_x": 0.375,
+        "bias_x": 0.3571,
         "significance_y": 0.6,
-        "text": "The public's trust in the electoral process is paramount, and these kinds of unsubstantiated allegations can erode that trust, which is damaging in the long run."
+        "text": "We need to consider the potential economic fallout for global supply chains if tensions escalate over Taiwan."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0714,
+        "significance_y": 0.5,
+        "text": "This kind of rhetoric could easily escalate into a devastating conflict that would harm everyone."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.25,
+        "significance_y": 0.5,
+        "text": "It's important to understand the specific 'consequences' Trump is alluding to, otherwise the warning is hollow."
     }
 ]

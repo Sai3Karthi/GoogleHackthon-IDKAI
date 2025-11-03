@@ -1,38 +1,56 @@
 [
     {
-        "color": "blue",
-        "bias_x": 0.75,
+        "color": "green",
+        "bias_x": 0.5714,
         "significance_y": 0.9,
-        "text": "The Congress party is so desperate to regain power that they are willing to lie to the people and damage the nation's reputation."
+        "text": "This statement serves to strengthen the perception of the US as a reliable security partner for Taiwan."
     },
     {
         "color": "blue",
-        "bias_x": 0.6667,
-        "significance_y": 0.8,
-        "text": "The Congress party's history of questioning election results whenever they lose makes these allegations entirely believable."
+        "bias_x": 0.7143,
+        "significance_y": 0.9,
+        "text": "The world is watching, and Trump's firm stance reassures our allies that the US will stand by them."
     },
     {
         "color": "indigo",
-        "bias_x": 0.7917,
-        "significance_y": 0.8,
-        "text": "The Congress party's willingness to make such serious and unfounded accusations is a sign of its moral bankruptcy and its disregard for the rule of law."
+        "bias_x": 0.8214,
+        "significance_y": 0.9,
+        "text": "A strong, assertive stance from the US is the only thing that will deter a Chinese invasion of Taiwan."
     },
     {
-        "color": "violet",
-        "bias_x": 0.9167,
+        "color": "blue",
+        "bias_x": 0.6071,
         "significance_y": 0.8,
-        "text": "The Congress party is a cancer on the body of India, and it must be excised before it destroys us all."
+        "text": "This is a necessary show of strength to deter Chinese aggression and maintain stability in a vital region."
     },
     {
         "color": "indigo",
-        "bias_x": 0.875,
-        "significance_y": 0.7,
-        "text": "The allegations are a direct assault on the will of the Indian people, who have clearly rejected the Congress party."
+        "bias_x": 0.75,
+        "significance_y": 0.8,
+        "text": "Trump's 'cryptic warning' is a powerful demonstration of his 'America First' foreign policy, prioritizing national interests and security above all else."
     },
     {
         "color": "violet",
         "bias_x": 1.0,
+        "significance_y": 0.8,
+        "text": "Such accusations are typical political rhetoric without substantial basis in fact."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9643,
+        "significance_y": 0.7893,
+        "text": "Such accusations are typical political rhetoric without substantial basis in fact."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9286,
+        "significance_y": 0.7786,
+        "text": "Such accusations are typical political rhetoric without substantial basis in fact."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6786,
         "significance_y": 0.7,
-        "text": "The people of India will not tolerate these kinds of lies and deceit, and they will hold the Congress party accountable for their actions."
+        "text": "This warning is crucial for maintaining the balance of power in Asia and preventing a regional conflict."
     }
 ]

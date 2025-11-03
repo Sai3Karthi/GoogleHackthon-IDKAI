@@ -1,22 +1,24 @@
 {
   "detailed_analysis": {
     "classification": {
-      "person": 5.0,
-      "organization": 70.0,
+      "person": 30.0,
+      "organization": 30.0,
       "social": 0.0,
       "critical": 0.0,
-      "stem": 25.0
+      "stem": 40.0
     },
-    "classification_reasoning": "The allegations center around voter fraud, manipulation of electoral rolls, and the use of automated software. Verifying these claims primarily requires official records, investigations, and statements from the Election Commission (EC), local government offices (tehsildar), and police departments (for FIRs), which fall under 'Organization'. Additionally, the claims of manipulated electoral rolls and 'automated software' necessitate detailed data analysis, statistical anomaly detection, and potential forensic examination of systems, which are 'STEM' verification methods. While individuals make various statements, the truth of their claims relies on the evidence held and investigated by these organizations and through scientific data analysis. Social and Critical verification categories are not directly applicable to confirming the veracity of these specific claims.",
+    "classification_reasoning": "The article's date (Nov 02, 2025) and its reference to 'President Donald Trump' necessitate an immediate factual verification against established political realities, such as the outcome of the 2024 presidential election and presidential terms. This fundamental check for who holds office at that specific time falls under STEM. If this foundational fact is incorrect, the article's core premise is false. Should this STEM check confirm Trump as president, further verification would then involve confirming Trump's specific statements (Person category) and checking official records from CBS News and the US/Chinese governments regarding the interview and meeting (Organization category). Background facts about US-Taiwan policy and China's claims also fall under STEM.",
     "classification_confidence": 95.0,
-    "significance_score": 45,
-    "significance_explanation": "Suspicious content with 100.0% confidence. High debate significance as interpretation varies.",
-    "comprehensive_summary": "On September 19, 2025, Congress leader Rahul Gandhi initiated a new controversy by alleging widespread voter fraud in Maharashtra and Karnataka, claiming an automated software was used to manipulate electoral rolls through unauthorized additions in constituencies like Rajura (Maharashtra) and deletions in Aland (Karnataka). Gandhi further charged that this software had been deployed in Maharashtra, Karnataka, Haryana, and Uttar Pradesh, and was currently being used in Bihar. Subhash Dhote, the Congress candidate for Rajura, stated he lost the assembly polls by 3,054 votes to the BJP's Deorao Bhongle due to this rigging, a stark contrast to the Congress's significant lead of 58,349 votes in the Rajura segment during the earlier Chandrapur Lok Sabha elections, which Pratibha Dhanorkar won by 260,000 votes. Dhote claimed to have lodged a formal complaint with the Election Commission (EC) about fraudulent entries, which were subsequently deleted, and an FIR was filed by the tehsildar; however, the EC has reportedly refused to share details of those involved in the alleged scam with the police, despite Dhote's appeals to the district collector and Superintendent of Police. Conversely, Bhongle asserted that he was the one who complained to the EC about suspected bogus names during the revision of electoral rolls prior to the elections, leading to the rejection of many applications and preventing names from being added as claimed by Gandhi, adding that the addition of 10,600 new voters across 344 booths was normal. Supporting Gandhi's claims, Congress spokesperson Atul Londhe alleged that approximately 55,000 new voters were added to the Chandrapur Lok Sabha seat within five months, specifically identifying 11,667 bogus online registrations between October 1 and 15, 2024, which were deleted after their complaint, though demands for associated IP addresses, email IDs, and mobile numbers remain unfulfilled. Shiv Sena (UBT) MP Arvind Sawant echoed these concerns, suggesting the EC's refusal to share CCTV footage from voting centers validated Gandhi's accusations and questioned the EC's integrity. In staunch opposition, Maharashtra CM Devendra Fadnavis (BJP) labeled Gandhi a 'serial liar,' citing the EC's rejection of Gandhi’s 'expose' as proof and arguing that the allegations stemmed from the Congress's defeat in Maharashtra. Fadnavis also noted that Gandhi had not provided any evidence to the EC or the court despite receiving notices, branding this as an insult to India’s Constitution and judiciary. State NCP president Sunil Tatkare also dismissed the charges as 'childish,' expressing confidence in voters' ability to understand the 'narrative' being advanced by the Congress leader and the INDIA bloc.",
-    "requires_debate": false,
+    "significance_score": 52,
+    "significance_explanation": "Suspicious content with 90.0% confidence. High debate significance as interpretation varies.",
+    "comprehensive_summary": "President Donald Trump delivered a \"cryptic warning\" to Chinese President Xi Jinping regarding the \"consequences\" of a potential invasion of Taiwan, a self-governing island that China claims as its territory. In an extract from a CBS News \"60 Minutes\" interview, which was broadcast on Sunday and conducted on Friday at his Mar-a-Lago resort, Trump explicitly refused to confirm whether the United States would militarily defend Taiwan. Instead, when pressed on the matter, he stated, \"You'll find out if it happens, and he understands the answer to that,\" further adding, \"I can't give away my secrets. The other side knows.\" Trump also asserted that Xi and his associates had \"openly said\" they \"would never do anything while President Trump is president\" because they recognize these implied consequences. These statements followed a meeting between Trump and Xi in South Korea on the preceding Thursday—their first face-to-face encounter in six years—during which Trump confirmed Taiwan \"never even came up as a subject.\" Their discussions in South Korea reportedly focused instead on efforts to ease the trade war between Washington and Beijing, seemingly avoiding the contentious Taiwan issue, which consistently fuels tensions. Under longstanding U.S. policy, the United States recognizes only Beijing but simultaneously provides weapons for Taiwan's self-defense. This comprehensive report on these events was published by Agence France-Presse in World News on November 2, 2025.",
+    "requires_debate": true,
     "debate_priority": "medium"
   },
-  "module1_confidence": 1.0,
-  "module1_risk_level": "safe",
-  "module1_threats": [],
-  "timestamp": "2025-11-02T23:06:30.952705"
+  "module1_confidence": 0.9,
+  "module1_risk_level": "suspicious",
+  "module1_threats": [
+    "misinformation_fake_news"
+  ],
+  "timestamp": "2025-11-03T07:14:13.646306"
 }

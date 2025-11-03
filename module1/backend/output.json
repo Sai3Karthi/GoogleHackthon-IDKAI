@@ -1,19 +1,21 @@
 {
   "input_type": "text",
-  "risk_level": "safe",
-  "confidence": 1.0,
-  "threats": [],
-  "recommendation": "This content is a news report covering political allegations of voter fraud, presenting multiple perspectives. It does not contain any elements indicative of scams, phishing, fraud, or malicious software distribution.",
+  "risk_level": "suspicious",
+  "confidence": 0.9,
+  "threats": [
+    "misinformation_fake_news"
+  ],
+  "recommendation": "The content presents a news report about events supposedly occurring in November 2025, which is a future date, strongly indicating it is misinformation or a fabricated news story.",
   "ai_powered": true,
   "analysis_details": {
     "red_flags": [
-      "The provided text is a news article detailing political allegations of voter fraud in India. It clearly attributes statements to various political figures (Rahul Gandhi, Subhash Dhote, Deorao Bhongle, Atul Londhe, Arvind Sawant, Devendra Fadnavis) and presents both the allegations and the counter-arguments/denials. The article's structure, tone, and content are consistent with standard journalism. There are no embedded links, requests for personal information, financial solicitations, offers for investments or get-rich-quick schemes, or any attempts to distribute malicious software. The language is factual and descriptive of a political controversy, not manipulative or designed for social engineering beyond reporting on political rhetoric."
+      "The most significant red flag is the publication date stated as 'Nov 02, 2025 22:28 pm IST.' As this date has not yet occurred (from the current perspective), the article is presenting a future event as if it has already taken place. This is a hallmark of misinformation or fake news, aiming to create a false narrative. While the content cites reputable news agencies like Agence France-Presse and NDTV, it is common for fabricated content to mimic legitimate sources to appear credible. There are no direct indicators of financial scams, phishing attempts, malicious software distribution, or explicit social engineering tactics beyond the potential for spreading false information."
     ],
-    "ai_explanation": "This content is a news report covering political allegations of voter fraud, presenting multiple perspectives. It does not contain any elements indicative of scams, phishing, fraud, or malicious software distribution.",
-    "ai_reasoning": "The provided text is a news article detailing political allegations of voter fraud in India. It clearly attributes statements to various political figures (Rahul Gandhi, Subhash Dhote, Deorao Bhongle, Atul Londhe, Arvind Sawant, Devendra Fadnavis) and presents both the allegations and the counter-arguments/denials. The article's structure, tone, and content are consistent with standard journalism. There are no embedded links, requests for personal information, financial solicitations, offers for investments or get-rich-quick schemes, or any attempts to distribute malicious software. The language is factual and descriptive of a political controversy, not manipulative or designed for social engineering beyond reporting on political rhetoric.",
-    "text_length": 3483
+    "ai_explanation": "The content presents a news report about events supposedly occurring in November 2025, which is a future date, strongly indicating it is misinformation or a fabricated news story.",
+    "ai_reasoning": "The most significant red flag is the publication date stated as 'Nov 02, 2025 22:28 pm IST.' As this date has not yet occurred (from the current perspective), the article is presenting a future event as if it has already taken place. This is a hallmark of misinformation or fake news, aiming to create a false narrative. While the content cites reputable news agencies like Agence France-Presse and NDTV, it is common for fabricated content to mimic legitimate sources to appear credible. There are no direct indicators of financial scams, phishing attempts, malicious software distribution, or explicit social engineering tactics beyond the potential for spreading false information.",
+    "text_length": 1946
   },
   "skip_to_final": false,
   "skip_reason": null,
-  "timestamp": "2025-11-02T23:05:18.895180"
+  "timestamp": "2025-11-03T07:13:32.442126"
 }
