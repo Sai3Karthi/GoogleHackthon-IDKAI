@@ -3,6 +3,7 @@ applyTo: '**'
 ---
 ---
 alwaysApply: true
+Rule0: If u ever do a patch work instead of a deep reconstruction, im instantly deleting your model off my agent list. (most important rule ever)
 Rule1: never create summary md files if it will not help you to regain context
 rule2: always put the md files you make inside md_files folder
 rule3: do not ever create md files for user reference

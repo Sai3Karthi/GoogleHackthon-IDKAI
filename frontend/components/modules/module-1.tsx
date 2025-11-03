@@ -269,24 +269,22 @@ export function Module1() {
     }
   }
 
-  const startNewSession = () => {
+  const startNewSession = async () => {
     if (confirm('Start a new session? This will clear all current analysis data.')) {
       console.log('[Module1] Starting new session - clearing all data')
-      // Clear all state
+      
+      const { clearAllData } = require('@/lib/session-manager')
+      await clearAllData()
+      
       clearAll()
-      // Clear session storage
-      if (typeof window !== 'undefined') {
-        const { clearSession } = require('@/lib/session-manager')
-        clearSession()
-      }
-      // Cancel any pending redirects
+      
       if (redirectTimerRef.current) {
         clearInterval(redirectTimerRef.current)
         redirectTimerRef.current = null
       }
       setRedirectCountdown(null)
-      // Reset to text mode
       setAnalysisMode("text")
+      
       console.log('[Module1] New session started')
     }
   }

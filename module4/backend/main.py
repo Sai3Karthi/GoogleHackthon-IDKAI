@@ -212,7 +212,44 @@ async def enrich_perspectives():
                 status_code=404,
                 detail=f"Required files not found: {', '.join(missing_files)}. Please upload perspective data first."
             )
-        
+
+        enriched_files = ["relevant_leftist.json", "relevant_rightist.json", "relevant_common.json"]
+        has_existing_enrichment = all((data_dir / f).exists() for f in enriched_files)
+
+        if has_existing_enrichment:
+            logger.info("Existing relevant_* files detected - skipping enrichment and using cached data")
+
+            summary = {}
+            total_links = 0
+
+            for filename in enriched_files:
+                file_path = data_dir / filename
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception as read_error:
+                    logger.error(f"Failed to read {filename} during enrichment skip: {read_error}")
+                    raise HTTPException(status_code=500, detail=f"Failed to read existing enrichment file: {filename}")
+
+                items = data.get("items", []) if isinstance(data, dict) else []
+                items_with_links = sum(1 for item in items if item.get("relevant_links"))
+                links_in_file = sum(len(item.get("relevant_links", [])) for item in items)
+                total_links += links_in_file
+
+                summary[filename] = {
+                    "total_items": data.get("total_items", len(items)) if isinstance(data, dict) else len(items),
+                    "items_with_links": items_with_links
+                }
+
+            return {
+                "status": "completed",
+                "message": "Existing enrichment data detected. Skipping web enrichment step.",
+                "files_created": enriched_files,
+                "total_relevant_links": total_links,
+                "summary": summary,
+                "skipped": True
+            }
+
         if not RelevanceSearchSystem:
             raise HTTPException(
                 status_code=503,
@@ -562,14 +599,28 @@ async def get_enrichment_items():
                         relevant_links = item.get('relevant_links', [])
                         
                         for link in relevant_links:
+                            raw_url = link.get('url') or link.get('link') or ''
+                            if not raw_url:
+                                continue
+
+                            title = link.get('title', 'No title')
+                            if isinstance(title, str):
+                                title = title.replace('\n', ' ').strip()
+
+                            extracted_text = link.get('extracted_content') or link.get('extracted_text') or ''
+                            if isinstance(extracted_text, str) and len(extracted_text) > 150:
+                                extracted_text = extracted_text[:150] + '...'
+                            elif not isinstance(extracted_text, str):
+                                extracted_text = ''
+
                             all_items.append({
                                 "category": category,
                                 "perspective_text": item.get('text', '')[:200] + '...' if len(item.get('text', '')) > 200 else item.get('text', ''),
-                                "url": link.get('url', ''),
-                                "title": link.get('title', 'No title'),
+                                "url": raw_url,
+                                "title": title,
                                 "trust_score": link.get('trust_score', 0.0),
                                 "source_type": link.get('source_type', 'Unknown'),
-                                "extracted_text": link.get('extracted_text', '')[:150] + '...' if len(link.get('extracted_text', '')) > 150 else link.get('extracted_text', '')
+                                "extracted_text": extracted_text
                             })
         
         return {

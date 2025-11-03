@@ -2,6 +2,7 @@
 
 import { ModuleLayout } from "./module-layout"
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { TextShimmer } from "@/components/ui/text-shimmer"
 import { PerspectiveCarousel } from "./module-3-carousel"
 import {
@@ -31,33 +32,49 @@ interface Perspective {
 export function Module3() {
   const [inputData, setInputData] = useState<any>(null)
   const [perspectives, setPerspectives] = useState<Perspective[]>([])
+  const router = useRouter()
+  
   const [finalOutput, setFinalOutput] = useState<{
     leftist: Perspective[]
     rightist: Perspective[]
     common: Perspective[]
   } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
+  
+  // Lazy initialization - check for cached data before setting initial state
+  const [currentStep, setCurrentStep] = useState(() => {
+    const sessionData = getModule3Data()
+    return sessionData && sessionData.perspectives.length > 0 ? 3 : 0
+  })
+  
   const [isGenerating, setIsGenerating] = useState(false)
-  const [showGraph, setShowGraph] = useState(false)
+  
+  const [showGraph, setShowGraph] = useState(() => {
+    const sessionData = getModule3Data()
+    return sessionData && sessionData.perspectives.length > 0
+  })
+  
   const [backendRunning, setBackendRunning] = useState(false)
   const [startingBackend, setStartingBackend] = useState(false)
-  const [isFromCache, setIsFromCache] = useState(false)
   const [currentInputHash, setCurrentInputHash] = useState<string>("")
   const [showMethodology, setShowMethodology] = useState(false)
   const [hoveredPerspective, setHoveredPerspective] = useState<Perspective | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [showOutputGraph, setShowOutputGraph] = useState(false)
+  
+  const [showOutputGraph, setShowOutputGraph] = useState(() => {
+    const sessionData = getModule3Data()
+    return sessionData && sessionData.perspectives.length > 0
+  })
+  
   const [loadingOutputGraph, setLoadingOutputGraph] = useState(false)
   const graphRef = useRef<HTMLDivElement>(null)
   const outputGraphRef = useRef<HTMLDivElement>(null)
-  const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showClusteringDetails, setShowClusteringDetails] = useState(false)
-  const [autoAdvanceTriggered, setAutoAdvanceTriggered] = useState(false)
   const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
+  const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const [isRestoringFromSession, setIsRestoringFromSession] = useState(false)
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -83,23 +100,13 @@ export function Module3() {
     // Try to restore from session first
     const sessionData = getModule3Data()
     if (sessionData && sessionData.perspectives.length > 0) {
+      console.log('[Module3] CACHED DATA DETECTED - NOT CHANGING STEPS')
       console.log('[Module3] Restoring from session:', sessionData.perspectives.length, 'perspectives')
-      // Set restoration flag FIRST to prevent countdown
-      setIsRestoringFromSession(true)
-      // Then set all other state
-      setTimeout(() => {
-        setPerspectives(sessionData.perspectives)
-        setFinalOutput(sessionData.finalOutput)
-        setCurrentInputHash(sessionData.inputHash)
-        setIsFromCache(true)
-        setCurrentStep(3)
-        setShowGraph(true)
-        setShowOutputGraph(true)
-        setAutoAdvanceTriggered(true)
-        setBackendRunning(true)
-        // Still load input data for display
-        fetchInputData().catch(console.error)
-      }, 0)
+      setBackendRunning(true)
+      setPerspectives(sessionData.perspectives)
+      setFinalOutput(sessionData.finalOutput)
+      setCurrentInputHash(sessionData.inputHash)
+      fetchInputData().catch(console.error)
       return
     }
     
@@ -122,21 +129,14 @@ export function Module3() {
           const cached = loadPerspectivesFromCache(hash)
           if (cached) {
             console.log('[Module3] Loading from cache:', cached.perspectives.length, 'perspectives')
-            setIsRestoringFromSession(true)
+            console.log('[Module3] CACHE FOUND - STOPPING HERE, NOT CHECKING BACKEND')
+            setBackendRunning(true)
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
-            setIsFromCache(true)
-            setCurrentStep(3)
-            setShowGraph(true)
-            setShowOutputGraph(true)
-            setAutoAdvanceTriggered(true)
-            setBackendRunning(true)
             console.log('[Module3] Cache loaded successfully')
+            return
           } else {
-            // No cache - check if backend is processing
             console.log('[Module3] No cache found, checking backend status...')
-            setIsFromCache(false)
-            setIsRestoringFromSession(false)
             setBackendRunning(true)
             checkBackendStatusAndResume()
           }
@@ -156,14 +156,8 @@ export function Module3() {
             console.log('[Module3] Loading from cache (fallback):', cached.perspectives.length, 'perspectives')
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
-            setIsFromCache(true)
-            setCurrentStep(3)
-            setShowGraph(true)
-            setShowOutputGraph(true)
-            setAutoAdvanceTriggered(true)
             console.log('[Module3] Cache loaded successfully (fallback)')
           } else {
-            setIsFromCache(false)
             console.log('[Module3] No cache found for hash (fallback):', hash)
           }
           
@@ -182,17 +176,8 @@ export function Module3() {
         
         const cached = loadPerspectivesFromCache(hash)
         if (cached) {
-          setIsRestoringFromSession(true)
           setPerspectives(cached.perspectives)
           setFinalOutput(cached.finalOutput)
-          setIsFromCache(true)
-          setCurrentStep(3)
-          setShowGraph(true)
-          setShowOutputGraph(true)
-          setAutoAdvanceTriggered(true)
-        } else {
-          setIsFromCache(false)
-          setIsRestoringFromSession(false)
         }
       }
     }
@@ -263,82 +248,62 @@ export function Module3() {
     }
 
     fetchFinalOutputFromBackend()
-    
-    if (currentStep === 3 && finalOutput && !showOutputGraph) {
-      setLoadingOutputGraph(true)
-      setShowOutputGraph(false)
-      
-      setTimeout(() => {
-        setLoadingOutputGraph(false)
-        setShowOutputGraph(true)
-      }, 1500)
-    }
-    
-    if (currentStep !== 3 && showOutputGraph) {
-      setShowOutputGraph(false)
-      setLoadingOutputGraph(false)
-    }
   }, [currentStep, finalOutput, showOutputGraph, perspectives])
 
+  // Redirect countdown to Module 4 after output is shown
   useEffect(() => {
-    if (autoAdvanceTimeoutRef.current) {
-      clearTimeout(autoAdvanceTimeoutRef.current)
-      autoAdvanceTimeoutRef.current = null
-    }
-
-    // Only auto-advance during fresh generation, not when restoring from session
-    if (currentStep === 2 && perspectives.length > 0 && !autoAdvanceTriggered && !isRestoringFromSession) {
-      autoAdvanceTimeoutRef.current = setTimeout(() => {
-        setCurrentStep(3)
-        setAutoAdvanceTriggered(true)
-      }, 5000)
-    }
-
-    return () => {
-      if (autoAdvanceTimeoutRef.current) {
-        clearTimeout(autoAdvanceTimeoutRef.current)
-        autoAdvanceTimeoutRef.current = null
+    const sessionData = getModule3Data()
+    const hasSessionData = sessionData && sessionData.perspectives.length > 0
+    
+    if (currentStep === 3 && finalOutput && showOutputGraph) {
+      // Only start countdown if:
+      // 1. We DON'T have session data (fresh completion)
+      // 2. AND we haven't already triggered redirect
+      if (!hasSessionData && !hasTriggeredRedirect) {
+        console.log('[Module3] Fresh data from backend, starting countdown to Module 4')
+        setHasTriggeredRedirect(true)
+        startRedirectCountdown()
+      } else {
+        console.log('[Module3] Backend data loaded, but session exists - user navigated back (no redirect)')
+        setHasTriggeredRedirect(true)
       }
     }
-  }, [currentStep, perspectives.length, autoAdvanceTriggered, isRestoringFromSession])
+  }, [currentStep, finalOutput, showOutputGraph, hasTriggeredRedirect])
 
-  // Redirect countdown to Module 4 after output is shown (only during fresh generation, not restoration)
-  useEffect(() => {
-    // Don't start countdown if restoring from session or cache
-    if (isRestoringFromSession || isFromCache) {
-      console.log('[Module3] Skipping countdown - viewing cached/session data')
-      return
+  const startRedirectCountdown = () => {
+    console.log('[Module3] Starting redirect countdown from 10 seconds')
+    
+    if (redirectTimerRef.current) {
+      clearInterval(redirectTimerRef.current)
     }
     
-    if (currentStep === 3 && finalOutput && showOutputGraph && redirectCountdown === null) {
-      // Start countdown immediately when output is shown during fresh generation
-      console.log('[Module3] Starting redirect countdown to Module 4')
-      setRedirectCountdown(5)
-
-      redirectTimerRef.current = setInterval(() => {
-        setRedirectCountdown((prev) => {
-          if (prev === null || prev <= 1) {
-            if (redirectTimerRef.current) {
-              clearInterval(redirectTimerRef.current)
-              redirectTimerRef.current = null
-            }
-            console.log('[Module3] Redirecting to Module 4')
-            setCurrentModule(4)
-            window.location.href = "/modules/4"
-            return null
+    setRedirectCountdown(10)
+    
+    redirectTimerRef.current = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          if (redirectTimerRef.current) {
+            clearInterval(redirectTimerRef.current)
+            redirectTimerRef.current = null
           }
-          return prev - 1
-        })
-      }, 1000)
-    }
+          console.log('[Module3] Countdown complete! Redirecting to Module 4')
+          router.push('/modules/4')
+          return null
+        }
+        console.log('[Module3] Countdown:', prev - 1)
+        return prev - 1
+      })
+    }, 1000)
+  }
 
-    return () => {
-      if (redirectTimerRef.current) {
-        clearInterval(redirectTimerRef.current)
-        redirectTimerRef.current = null
-      }
+  const cancelRedirect = () => {
+    if (redirectTimerRef.current) {
+      clearInterval(redirectTimerRef.current)
+      redirectTimerRef.current = null
     }
-  }, [currentStep, finalOutput, showOutputGraph, isRestoringFromSession, isFromCache])
+    setRedirectCountdown(null)
+    console.log('[Module3] Auto-redirect cancelled')
+  }
 
   useEffect(() => {
     if (currentStep !== 3 && showClusteringDetails) {
@@ -346,11 +311,7 @@ export function Module3() {
     }
   }, [currentStep, showClusteringDetails])
 
-  useEffect(() => {
-    if (currentStep === 3 && !autoAdvanceTriggered && perspectives.length > 0) {
-      setAutoAdvanceTriggered(true)
-    }
-  }, [currentStep, autoAdvanceTriggered, perspectives.length])
+
 
   const checkBackendStatusAndResume = async () => {
     try {
@@ -401,7 +362,6 @@ export function Module3() {
         const outputData = await outputResponse.json()
         if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
           setPerspectives(outputData.perspectives)
-          setCurrentStep(2)
           setShowGraph(true)
           
           // Fetch final clustered output
@@ -431,14 +391,8 @@ export function Module3() {
                 finalOutput: clusteredOutput,
                 inputHash: currentInputHash
               })
-              setIsFromCache(true)
             }
             
-            // Auto-advance to output step
-            setTimeout(() => {
-              setCurrentStep(3)
-              setShowOutputGraph(true)
-            }, 2000)
           }
         }
       }
@@ -508,7 +462,6 @@ export function Module3() {
         setFinalOutput(null)
         setShowGraph(false)
         setShowOutputGraph(false)
-        setAutoAdvanceTriggered(false)
 
         await startPerspectiveGeneration()
       } else {
@@ -552,8 +505,6 @@ export function Module3() {
     setIsGenerating(true)
     setLoading(true)
     setPerspectives([])
-    setAutoAdvanceTriggered(false)
-    setIsRestoringFromSession(false) // Mark as fresh generation
 
     try {
       // Setup event listeners BEFORE starting pipeline
@@ -672,7 +623,6 @@ export function Module3() {
                       finalOutput: clusteredOutput,
                       inputHash: currentInputHash
                     })
-                    setIsFromCache(true)
                   }
                 }
               } catch (error) {
@@ -682,6 +632,12 @@ export function Module3() {
               // Move to Step 2 (Visualisation) and show graph
               setCurrentStep(2)
               setShowGraph(true)
+              
+              // Auto-advance to step 3 after showing graph (only during fresh generation)
+              setTimeout(() => {
+                setCurrentStep(3)
+                setShowOutputGraph(true)
+              }, 3000)
             }
           }
         }
@@ -754,17 +710,6 @@ export function Module3() {
                   </div>
                 </div>
               )}
-
-              {/* Cache Status */}
-              {isFromCache && (
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <div>
-                    <span className="text-sm text-white/70">Cached</span>
-                    <p className="text-xs text-white/40">Instant load</p>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Action Buttons */}
@@ -777,40 +722,24 @@ export function Module3() {
                   Refresh Status
                 </button>
               )}
-              {isFromCache && (
-                <>
-                  <button
-                    onClick={() => {
-                      setCurrentModule(4)
-                      window.location.href = "/modules/4"
-                    }}
-                    className="px-4 py-2 border border-blue-500/30 rounded text-sm text-blue-400 hover:bg-blue-500/10 transition-all"
-                  >
-                    Continue to Module 4 →
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Clear cache and force regenerate?')) {
-                        clearCacheForHash(currentInputHash)
-                        setPerspectives([])
-                        setFinalOutput(null)
-                        setIsFromCache(false)
-                        setCurrentStep(0)
-                        setShowGraph(false)
-                        setShowOutputGraph(false)
-                        setAutoAdvanceTriggered(false)
-                        setIsRestoringFromSession(false)
-                        if (backendRunning) {
-                          checkBackendStatusAndResume()
-                        }
-                      }
-                    }}
-                    className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
-                  >
-                    Force Regenerate
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => {
+                  if (confirm('Clear cache and force regenerate?')) {
+                    clearCacheForHash(currentInputHash)
+                    setPerspectives([])
+                    setFinalOutput(null)
+                    setCurrentStep(0)
+                    setShowGraph(false)
+                    setShowOutputGraph(false)
+                    if (backendRunning) {
+                      checkBackendStatusAndResume()
+                    }
+                  }
+                }}
+                className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
+              >
+                Force Regenerate
+              </button>
             </div>
           </div>
 
@@ -1147,16 +1076,34 @@ export function Module3() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-xs text-white/40">Three JSON files ready for Module 4</div>
-                    {redirectCountdown !== null && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded text-blue-400 text-xs">
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Advancing to Module 4 in {redirectCountdown}s...</span>
-                      </div>
-                    )}
                   </div>
+
+                  {redirectCountdown !== null && (
+                    <div className="border border-blue-500/30 bg-blue-500/5 rounded p-6 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full border-2 border-blue-500/50 flex items-center justify-center">
+                            <span className="text-xl font-light text-blue-400">{redirectCountdown}</span>
+                          </div>
+                          <div>
+                            <p className="text-white/90 text-sm font-medium mb-1">
+                              Redirecting to Module 4: Debate & Analysis
+                            </p>
+                            <p className="text-white/50 text-xs">
+                              Module 4 enriches these perspectives with verified sources and runs the AI debate.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={cancelRedirect}
+                          className="px-4 py-2 border border-white/20 rounded text-sm text-white/80 hover:bg-white/5 transition-all"
+                        >
+                          Stay in Module 3
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="p-5 border border-red-500/20 bg-red-500/5 rounded">
                       <div className="text-xs text-red-400/70 mb-2 uppercase tracking-wider">Leftist</div>
@@ -1589,7 +1536,7 @@ export function Module3() {
       )}
     </ModuleLayout>
   )
-}
+} 
 
 
 

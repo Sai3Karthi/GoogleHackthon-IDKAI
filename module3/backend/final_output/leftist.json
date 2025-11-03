@@ -2,37 +2,37 @@
     {
         "color": "red",
         "bias_x": 0.0,
-        "significance_y": 0.8,
-        "text": "This is a blatant example of how wealth and privilege allow the elite to opt out of public services and spaces that ordinary people rely on."
+        "significance_y": 0.81,
+        "text": "The continued operation of 'Cat News' highlights a critical gap in public awareness about the real threats faced by wild cat populations."
     },
     {
         "color": "orange",
         "bias_x": 0.1905,
-        "significance_y": 0.8,
-        "text": "The closure could be due to a variety of factors, and we shouldn't immediately jump to conclusions about the owners' motives."
+        "significance_y": 0.74,
+        "text": "It would be beneficial to know if 'Cat News' also includes practical guidance for conservationists working on the ground."
     },
     {
         "color": "yellow",
         "bias_x": 0.3333,
-        "significance_y": 0.7,
-        "text": "The financial sustainability of such a venture is a major concern, and closures are sometimes a necessary business decision."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.0476,
-        "significance_y": 0.6,
-        "text": "Pippa Middleton is using her royal connections to create an exclusive, members-only environment, further stratifying society."
+        "significance_y": 0.73,
+        "text": "Understanding the readership demographics of 'Cat News' could help tailor its content to be more effective in reaching a wider audience."
     },
     {
         "color": "orange",
-        "bias_x": 0.2381,
-        "significance_y": 0.6,
-        "text": "It's possible this is a temporary measure due to staffing shortages or a need for infrastructure upgrades, rather than a permanent policy."
+        "bias_x": 0.2857,
+        "significance_y": 0.68,
+        "text": "The focus on 'scientific papers' might alienate readers who are interested in broader conservation efforts and success stories."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0952,
+        "significance_y": 0.65,
+        "text": "Scientific papers in 'Cat News' are often behind paywalls, making them inaccessible to the general public and independent researchers."
     },
     {
         "color": "yellow",
         "bias_x": 0.381,
-        "significance_y": 0.6,
-        "text": "There could be unforeseen logistical or operational challenges that have led to this difficult choice."
+        "significance_y": 0.65,
+        "text": "The content of 'Cat News' likely represents a snapshot of current research, and it would be interesting to see how the topics have evolved over the decades."
     }
 ]

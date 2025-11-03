@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
 import {
@@ -79,6 +80,7 @@ export function Module4Client() {
   const [enrichmentItems, setEnrichmentItems] = useState<EnrichmentItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string>("checking")
+  const router = useRouter()
   const [processingStep, setProcessingStep] = useState<string>("")
   const [debugLogs, setDebugLogs] = useState<string[]>([])
   const [showDebugTerminal, setShowDebugTerminal] = useState<boolean>(false)
@@ -93,28 +95,77 @@ export function Module4Client() {
     setDebugLogs(prev => [...prev, `[${timestamp}] ${message}`])
   }
 
-  const loadFromCache = () => {
+  const loadFromCache = async () => {
     try {
       const cached = localStorage.getItem(CACHE_KEY)
-      if (cached) {
-        const cacheData: Module4Cache = JSON.parse(cached)
-        const age = Date.now() - cacheData.timestamp
-        
-        if (age < CACHE_EXPIRY_MS) {
-          console.log('[Module4] Loaded from cache:', cacheData.debateResult)
-          setDebateResult(cacheData.debateResult)
-          if (cacheData.enrichmentResult) {
-            setEnrichmentResult(cacheData.enrichmentResult)
+      
+      if (!cached) {
+        console.log('[Module4] No cache found - starting fresh')
+        return
+      }
+
+      const cacheData: Module4Cache = JSON.parse(cached)
+      const age = Date.now() - cacheData.timestamp
+      
+      if (age >= CACHE_EXPIRY_MS) {
+        console.log('[Module4] Cache expired')
+        localStorage.removeItem(CACHE_KEY)
+        return
+      }
+
+      console.log('[Module4] Loading from cache:', cacheData.debateResult)
+      setDebateResult(cacheData.debateResult)
+      
+      if (cacheData.enrichmentResult) {
+        setEnrichmentResult(cacheData.enrichmentResult)
+        setShowEnrichmentItems(true)
+      }
+      
+      if (cacheData.debateResult.debate_transcript && Array.isArray(cacheData.debateResult.debate_transcript) && cacheData.debateResult.debate_transcript.length > 0) {
+        const messagesWithType = cacheData.debateResult.debate_transcript.map(msg => {
+          if (!msg.agent_type && msg.agent) {
+            const agentLower = msg.agent.toLowerCase()
+            if (agentLower.includes('leftist') || agentLower.includes('left')) {
+              return { ...msg, agent_type: 'leftist' }
+            } else if (agentLower.includes('rightist') || agentLower.includes('right')) {
+              return { ...msg, agent_type: 'rightist' }
+            } else if (agentLower.includes('judge') || agentLower.includes('moderator')) {
+              return { ...msg, agent_type: 'judge' }
+            }
           }
-          saveModule4Data({
-            debateResult: cacheData.debateResult,
-            enrichmentResult: cacheData.enrichmentResult ?? null
-          })
-        } else {
-          console.log('[Module4] Cache expired')
-          localStorage.removeItem(CACHE_KEY)
+          return msg
+        })
+        
+        setShowDebateMessages(true)
+        
+        try {
+          for (let i = 0; i < messagesWithType.length; i++) {
+            setLiveDebateMessages(messagesWithType.slice(0, i + 1))
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
+        } catch (animError) {
+          console.error('[Module4] Cache animation error:', animError)
+          // Fallback: show all messages immediately
+          setLiveDebateMessages(messagesWithType)
         }
       }
+      
+      try {
+        const itemsResponse = await fetch('/module4/api/enrichment-items', { cache: 'no-store' })
+        if (itemsResponse.ok) {
+          const itemsData = await itemsResponse.json()
+          if (itemsData.items && Array.isArray(itemsData.items)) {
+            setEnrichmentItems(itemsData.items)
+          }
+        }
+      } catch (err) {
+        console.error('[Module4] Error loading enrichment items:', err)
+      }
+      
+      saveModule4Data({
+        debateResult: cacheData.debateResult,
+        enrichmentResult: cacheData.enrichmentResult ?? null
+      })
     } catch (error) {
       console.error('[Module4] Error loading cache:', error)
     }
@@ -161,6 +212,9 @@ export function Module4Client() {
     }
   }
 
+  // Removed problematic cache check that was clearing state on every render
+  // The cache is now handled properly in startDebateProcess and loadFromCache
+
   // ONLY run on mount, client-side only
   useEffect(() => {
     setCurrentModule(4)
@@ -189,19 +243,49 @@ export function Module4Client() {
     }
   }, [])
 
+  // Auto-scroll to latest message in debate view
+  useEffect(() => {
+    if (debateViewRef.current && liveDebateMessages.length > 0) {
+      debateViewRef.current.scrollTo({
+        top: debateViewRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  }, [liveDebateMessages])
+
+  // Auto-focus on debate container when it first appears
+  useEffect(() => {
+    if (showDebateMessages && debateViewRef.current) {
+      const container = debateViewRef.current.parentElement
+      if (container) {
+        setTimeout(() => {
+          container.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
+      }
+    }
+  }, [showDebateMessages])
+
   const startDebateProcess = async () => {
     setLoading(true)
     setError(null)
     setDebateResult(null)
-    setEnrichmentResult(null)
-    setEnrichmentItems([])
+    
+    // Check if we already have enrichment data (from cache or previous run)
+    const hasExistingEnrichment = enrichmentResult !== null || enrichmentItems.length > 0
+    
+    // Only clear enrichment data if we don't have any
+    if (!hasExistingEnrichment) {
+      setEnrichmentResult(null)
+      setEnrichmentItems([])
+      setShowEnrichmentItems(false)
+    }
+    
     setLiveDebateMessages([])
-    setShowEnrichmentItems(false)
     setShowDebateMessages(false)
     setProcessingStep("")
     setDebugLogs([])
     setShowDebugTerminal(true)
-    let latestEnrichment: EnrichmentResult | null = null
+    let latestEnrichment: EnrichmentResult | null = enrichmentResult
     
     try {
       console.log('[Module4] Starting complete debate process...')
@@ -241,27 +325,44 @@ export function Module4Client() {
       
       // Step 2: Enrich perspectives with web evidence
       {
-        setProcessingStep("Step 2/3: Enriching with web evidence (Google Search + AI verification)... This may take up to 15 minutes.")
-        console.log('[Module4] Step 2/3: Enriching perspectives with web evidence...')
-        addDebugLog('[STEP 2/3] Starting web enrichment process...')
-        addDebugLog('[INFO] This may take up to 15 minutes')
-        addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
-        
-        try {
-          const enrichUrl = "/module4/api/enrich-perspectives"
-          addDebugLog('[INFO] Calling enrichment endpoint...')
+        // Skip enrichment if we already have enrichment data
+        if (hasExistingEnrichment) {
+          setProcessingStep("Step 2/3: Using cached enrichment data (skipping web search)...")
+          console.log('[Module4] Step 2/3: Skipping enrichment, using existing data')
+          addDebugLog('[STEP 2/3] Using cached enrichment data')
+          addDebugLog('[INFO] Skipping web enrichment - already have enriched data')
           
-          const controller = new AbortController()
-          const enrichResponse = await fetch(enrichUrl, {
-            method: "POST",
-            headers: { 'Content-Type': 'application/json' },
-            cache: 'no-store',
-            signal: controller.signal,
-            keepalive: true
-          })
+          const totalLinks = enrichmentResult?.total_relevant_links || enrichmentResult?.total_links_found || enrichmentItems.length
+          addDebugLog(`[SUCCESS] Using ${totalLinks} verified web sources from cache`)
           
-          if (enrichResponse.ok) {
-            const enrichData = await enrichResponse.json()
+          // Keep existing enrichment items visible
+          if (enrichmentItems.length > 0) {
+            setShowEnrichmentItems(true)
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } else {
+          setProcessingStep("Step 2/3: Enriching with web evidence (Google Search + AI verification)... This may take up to 15 minutes.")
+          console.log('[Module4] Step 2/3: Enriching perspectives with web evidence...')
+          addDebugLog('[STEP 2/3] Starting web enrichment process...')
+          addDebugLog('[INFO] This may take up to 15 minutes')
+          addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
+          
+          try {
+            const enrichUrl = "/module4/api/enrich-perspectives"
+            addDebugLog('[INFO] Calling enrichment endpoint...')
+            
+            const controller = new AbortController()
+            const enrichResponse = await fetch(enrichUrl, {
+              method: "POST",
+              headers: { 'Content-Type': 'application/json' },
+              cache: 'no-store',
+              signal: controller.signal,
+              keepalive: true
+            })
+            
+            if (enrichResponse.ok) {
+              const enrichData = await enrichResponse.json()
             
             if (enrichData.status === "completed") {
               latestEnrichment = enrichData
@@ -302,11 +403,16 @@ export function Module4Client() {
           await new Promise(resolve => setTimeout(resolve, 1500))
         }
       }
+      }
       
       setProcessingStep("Step 3/3: Running AI agent debate (Leftist vs Rightist vs Judge)... This may take several minutes.")
       console.log('[Module4] Step 3/3: Starting debate...')
       addDebugLog('[STEP 3/3] Starting AI agent debate...')
       addDebugLog('[INFO] Running multi-round debate with Leftist, Rightist, and Judge agents')
+      
+      // Show debate section immediately to indicate debate is starting
+      setShowDebateMessages(true)
+      setLiveDebateMessages([])
       
       // Try multiple times with direct orchestrator URL as fallback
       let debateResponse: Response | null = null
@@ -368,40 +474,53 @@ export function Module4Client() {
       console.log('[Module4] Debate result:', data)
       addDebugLog(`[SUCCESS] Debate completed!`)
       
+      // Set debate result immediately so trust score shows up
+      setDebateResult(data)
+      addDebugLog(`[RESULT] Final trust score: ${data.trust_score || 'N/A'}`)
+      
       // Fetch debate messages for animated display
       addDebugLog('[INFO] Fetching debate messages for display...')
       try {
         const messagesResponse = await fetch('/module4/api/debate-messages', { cache: 'no-store' })
         if (messagesResponse.ok) {
           const messagesData = await messagesResponse.json()
-          if (messagesData.status === "completed") {
+          if (messagesData.status === "completed" && Array.isArray(messagesData.messages)) {
             const allMessages = messagesData.messages
-            addDebugLog(`[INFO] Playing back ${allMessages.length} debate messages...`)
-            setShowDebateMessages(true)
+            addDebugLog(`[INFO] Animating ${allMessages.length} debate messages...`)
             
-            // Animate messages one by one
+            // Animate messages one by one (container already visible from step 3 start)
+            // Use requestAnimationFrame for smoother updates
             for (let i = 0; i < allMessages.length; i++) {
-              setLiveDebateMessages(allMessages.slice(0, i + 1))
-              addDebugLog(`[DEBATE] Message ${i + 1} of ${allMessages.length} - ${allMessages[i].agent}`)
-              await new Promise(resolve => setTimeout(resolve, 1500))
+              // Safety check: ensure component is still mounted
+              try {
+                setLiveDebateMessages(allMessages.slice(0, i + 1))
+                await new Promise(resolve => setTimeout(resolve, 500))
+              } catch (e) {
+                console.error('[Module4] Animation interrupted:', e)
+                // Set all messages at once if animation fails
+                setLiveDebateMessages(allMessages)
+                break
+              }
             }
+          } else {
+            addDebugLog('[WARN] No messages found in response')
           }
+        } else {
+          addDebugLog('[WARN] Failed to fetch debate messages')
         }
       } catch (err) {
         console.error('[Module4] Failed to fetch debate messages:', err)
+        addDebugLog('[ERROR] Could not load debate messages for display')
       }
       
-      addDebugLog(`[RESULT] Final trust score: ${data.trust_score || 'N/A'}`)
+      // Save to cache and session
       addDebugLog('[INFO] Saving results and cache...')
-      
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      setDebateResult(data)
       saveToCache(data, latestEnrichment || undefined)
       saveModule4Data({
         debateResult: data,
         enrichmentResult: latestEnrichment
       })
+      
       setProcessingStep("")
       addDebugLog('[COMPLETE] All steps completed successfully!')
     } catch (err) {
@@ -409,23 +528,23 @@ export function Module4Client() {
       addDebugLog(`[ERROR] ${err instanceof Error ? err.message : 'Unknown error'}`)
       setError(err instanceof Error ? err.message : "Failed to connect to Module 4 backend")
       setProcessingStep("")
+      
+      // Ensure UI is still visible even on error
+      if (debateResult) {
+        addDebugLog('[INFO] Results were saved before error occurred')
+      }
     } finally {
       setLoading(false)
+      console.log('[Module4] Process completed, loading state cleared')
     }
   }
 
   const clearDebate = () => {
     setDebateResult(null)
-    setEnrichmentResult(null)
-    setEnrichmentItems([])
     setLiveDebateMessages([])
-    setShowEnrichmentItems(false)
     setShowDebateMessages(false)
     setError(null)
-    localStorage.removeItem(CACHE_KEY)
-    clearModule4Data()
-    clearFinalAnalysisData()
-    console.log('[Module4] Cleared debate and enrichment results and cache')
+    console.log('[Module4] Cleared debate display (cache and enrichment data preserved)')
   }
 
   const getAgentDisplay = (agent: string) => {
@@ -590,6 +709,77 @@ export function Module4Client() {
             </div>
           )}
 
+          {/* Debate Messages Display (Animated Messenger Style) */}
+          {showDebateMessages && (
+            <div className="border border-purple-500/30 bg-purple-500/5 rounded-lg p-6 mb-6 animate-fade-in-up">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+                <h4 className="text-sm font-medium text-purple-400 uppercase tracking-wider">
+                  {liveDebateMessages.length > 0 ? 'AI Debate in Progress' : 'Starting AI Debate...'}
+                </h4>
+                {liveDebateMessages.length > 0 && (
+                  <span className="text-xs text-white/40 ml-auto">{liveDebateMessages.length} messages</span>
+                )}
+                {liveDebateMessages.length === 0 && loading && (
+                  <div className="ml-auto flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
+                    <span className="text-xs text-purple-400">Debate running in background...</span>
+                  </div>
+                )}
+              </div>
+              <div ref={debateViewRef} className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar bg-black/20 rounded-lg p-4">
+                {liveDebateMessages.length === 0 && loading && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 mb-3">
+                        <div className="w-3 h-3 rounded-full bg-purple-400 animate-pulse"></div>
+                        <div className="w-3 h-3 rounded-full bg-purple-400 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-3 h-3 rounded-full bg-purple-400 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                      <p className="text-purple-300 text-sm font-medium">AI agents are debating...</p>
+                      <p className="text-white/40 text-xs mt-1">Messages will appear here as they are generated</p>
+                    </div>
+                  </div>
+                )}
+                {liveDebateMessages.map((msg, idx) => {
+                  const isLeftist = msg.agent_type === 'leftist'
+                  const isRightist = msg.agent_type === 'rightist'
+                  const isJudge = msg.agent_type === 'judge'
+                  
+                  return (
+                    <div key={idx} className={`flex ${isJudge ? 'justify-center' : isRightist ? 'justify-end' : 'justify-start'} animate-fade-in-up`} style={{ animationDelay: `${idx * 0.1}s` }}>
+                      <div className={`max-w-[70%] rounded-2xl px-4 py-3 backdrop-blur-sm ${
+                        isLeftist ? 'bg-blue-500/20 border border-blue-500/30 text-blue-100' :
+                        isRightist ? 'bg-red-500/20 border border-red-500/30 text-red-100' :
+                        isJudge ? 'bg-green-500/20 border border-green-500/30 text-green-100' :
+                        'bg-white/10 border border-white/20 text-white/80'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-semibold ${
+                            isLeftist ? 'text-blue-300' :
+                            isRightist ? 'text-red-300' :
+                            isJudge ? 'text-green-300' :
+                            'text-white/60'
+                          }`}>
+                            {msg.agent}
+                          </span>
+                          {msg.round && msg.round > 0 && (
+                            <span className="text-xs text-white/40">
+                              Round {msg.round}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message || msg.argument || 'No content'}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Enrichment Items Display */}
           {showEnrichmentItems && enrichmentItems.length > 0 && (
             <div className="border border-cyan-500/30 bg-cyan-500/5 rounded-lg p-6 mb-6 animate-fade-in-up">
@@ -632,52 +822,6 @@ export function Module4Client() {
                     )}
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Debate Messages Display (Animated Messenger Style) */}
-          {showDebateMessages && liveDebateMessages.length > 0 && (
-            <div className="border border-purple-500/30 bg-purple-500/5 rounded-lg p-6 mb-6 animate-fade-in-up">
-              <div className="flex items-center gap-2 mb-4">
-                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                </svg>
-                <h4 className="text-sm font-medium text-purple-400 uppercase tracking-wider">AI Debate in Progress</h4>
-                <span className="text-xs text-white/40 ml-auto">{liveDebateMessages.length} messages</span>
-              </div>
-              <div ref={debateViewRef} className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
-                {liveDebateMessages.map((msg, idx) => {
-                  const isLeftist = msg.agent_type === 'leftist'
-                  const isRightist = msg.agent_type === 'rightist'
-                  const isJudge = msg.agent_type === 'judge'
-                  
-                  return (
-                    <div key={idx} className={`flex ${isJudge ? 'justify-center' : isRightist ? 'justify-end' : 'justify-start'} animate-fade-in-up`} style={{ animationDelay: `${idx * 0.1}s` }}>
-                      <div className={`max-w-[80%] rounded-lg p-4 ${
-                        isLeftist ? 'bg-blue-500/20 border border-blue-500/30' :
-                        isRightist ? 'bg-red-500/20 border border-red-500/30' :
-                        isJudge ? 'bg-yellow-500/20 border border-yellow-500/30 text-center' :
-                        'bg-white/10 border border-white/20'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-xs font-bold uppercase tracking-wider ${
-                            isLeftist ? 'text-blue-400' :
-                            isRightist ? 'text-red-400' :
-                            isJudge ? 'text-yellow-400' :
-                            'text-white/60'
-                          }`}>
-                            {msg.agent}
-                          </span>
-                          {msg.round && msg.round > 0 && (
-                            <span className="text-xs text-white/40">Round {msg.round}</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
             </div>
           )}
@@ -726,6 +870,15 @@ export function Module4Client() {
                   <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{debateResult.judgment}</p>
                 </div>
               )}
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => router.push('/modules/5')}
+                  className="px-4 py-2 text-sm border border-white/20 text-white/70 hover:text-white hover:border-white/40 rounded transition-colors"
+                >
+                  View Module 5 Summary →
+                </button>
+              </div>
             </div>
           )}
         </div>

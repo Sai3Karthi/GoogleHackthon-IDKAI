@@ -103,12 +103,13 @@ export function Module5() {
     loadComprehensiveData()
   }, [])
 
-  const startNewSession = () => {
+  const startNewSession = async () => {
     if (confirm('Start a new session? This will clear all current data and return to Module 1.')) {
       console.log('[Module5] Starting new session - clearing all data')
-      // Clear session storage
-      clearSession()
-      // Redirect to Module 1
+      
+      const { clearAllData } = require('@/lib/session-manager')
+      await clearAllData()
+      
       console.log('[Module5] Redirecting to Module 1')
       router.push('/modules/1')
     }

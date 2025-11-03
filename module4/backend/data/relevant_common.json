@@ -1,33 +1,24 @@
 {
-  "topic": "Bucklebury Farm, a Berkshire farm park co-owned by Pippa Middleton, sister of Catherine, the Princess of Wales, has reportedly become the first establishment in the country to cease allowing visitors ...",
+  "topic": "Cat News, the official newsletter of the IUCN/SSC Cat Specialist Group, first began publication in 1984 and continues to serve its subscribers by offering a diverse collection of scientific papers, ar...",
   "source_file": "common.json",
-  "processed_at": "2025-11-03T17:28:27.080413",
+  "processed_at": "2025-11-03T22:06:11.865904",
   "total_items": 2,
   "items": [
     {
-      "text": "Operational efficiency and cost-effectiveness might be the driving factors behind this strategic decision.",
+      "text": "The consistent publication of 'Cat News' provides a valuable historical record of scientific advancements in felid research.",
       "bias_x": 0.4762,
-      "significance_y": 0.8,
-      "combined_score": 0.381,
+      "significance_y": 0.71,
+      "combined_score": 0.3381,
       "color": "green",
       "relevant_links": []
     },
     {
-      "text": "Perhaps the farm is shifting its focus towards educational programs or private events for a more targeted audience.",
-      "bias_x": 0.5238,
-      "significance_y": 0.6,
-      "combined_score": 0.3143,
-      "color": "green",
-      "relevant_links": [
-        {
-          "title": "Pippa Middleton's Surprising New Change at Her $1.9 Million Farm ...\nwww.marieclaire.com › Celebrity",
-          "link": "https://www.marieclaire.com/celebrity/royals/pippa-middleton-big-change-bucklebury-farm/",
-          "snippet": "",
-          "trust_score": 0.6,
-          "source_type": "News Organization",
-          "extracted_content": "CELEBRITY FASHION BEAUTY CULTURE NICE TALK MORE RSS TRENDING Luxury Beauty Gifts Aritzia x Nike Jacques Marie Mage Funnel-Neck Jackets CELEBRITY ROYALS Pippa Middleton’s Surprising New Change at Her $1.9 Million Farm Has Everyone Talking Princess Kate's sister is receiving praise for a recent move she's made. Newsletter When you purchase through links on our site, we may earn an affiliate commission. Here’s how it works. (Image credit: Getty Images) BY KRISTIN CONTINO PUBLISHED 4 DAYS AGO In News Pippa Middleton doesn't often make public appearances, but Princess Kate's sister—who lives with husband James Matthews and their three children in Berkshire, England—is busy making changes at the expansive farm park she owns. In 2020, Pippa and James paid $1.9 million for Bucklebury Farm, a 72-acre property featuring a petting zoo, glamping pods and a play area. Now the farm is receiving accolades from one animal welfare organization for its efforts to \"create a more welfare-conscious experience.\" Advertisement Bucklebury Farm is located minutes away from Carole and Michael Middleton's home, Bucklebury Manor, where Pippa, Kate and their brother, James Middleton, grew up. The farm's petting zoo is a popular family attraction in the area and was visited by a young Prince George before it was owned by his aunt Pippa. On October 29, the Rabbit Welfare Association and Fund shared a post on Instagram featuring photos of Bucklebury Farm's rabbit areas, including signs that read \"We don't bug bunnies at Bucklebury.\" YOU MAY LIKE Pippa Middleton Takes on a Surprising New Job—And It Follows in Sister Princess Kate's Footsteps Royal Relative Reduces Kate to \"Shriek of Giggles\" Kate Middleton’s Brother, James Middleton, Publicly Reacted to Her State Banquet Moment Pippa Middleton and James Matthews, seen at the 2023 Together at Christmas concert, own Bucklebury Farm. (Image credit: Getty Images) Bucklebury Farm shared a photo of its new pumpkin patch on Instagram. (Image credit: Bucklebury Farm/Instagram) Rabbit welfare association at Bucklebury Farm A photo posted by on The organization praised Pippa and James's farm for its efforts, writing, \"Earlier this year, we launched our Don’t Bug Bunnies campaign to highlight the issues of Pat a Pet sessions & poor living conditions at Farm Parks. Farm parks might look like fun family days out but behind the scenes, many animals, especially rabbits and guinea pigs, are suffering and are often kept in tiny hutches.\" The organization shared that it has \"been working with @bucklebury.farm to revamp their rabbit area to phase out pat-a-pet sessions and create a more welfare-conscious experience.\" This includes \"spacious, enriched housing,\" which the group deemed \"amazing.\" \"We're also launching the new Farm Park Welfare Standards with them and together we will educate other farm parks and rabbit owners,\" the post continued. In addition to protecting animal welfare, the farm is said to be making additional changes. This summer, the Daily Mail reported that Pippa and James were granted permission to build a nursery serving \"children aged between nine months and five years\" on the property. Stay In The Know Get exclusive access to fashion and beauty trends, hot-off-the-press celebrity news, and more. Contact me with news and offers from other Future brands Receive email from us on behalf of our trusted partners or sponsors By submitting your information you agree to the Terms & Conditions and Privacy Policy and are aged 16 or over. Kristin Contino Senior Royal and Celebrity Editor Kristin Contino is Marie Claire's Senior Royal and Celebrity editor. She's been covering royalty since 2018—including major moments such as the Platinum Jubilee, Queen Elizabeth II’s death and King Charles III's coronation—and places a particular focus on the British Royal Family's style and what it means. Prior to working at Marie Claire, she wrote about celebrity and royal fashion at Page Six Style and covered royalty from around the world as chief reporter at Royal Central. Kristin has provided expert commentary for outlets including the BBC, Sky News, US Weekly, the Today Show and many others. Kristin is also the published author of two novels, “The Legacy of Us” and “A House Full of Windsor.” She's passionate about travel, history, horses, and learning everything she can about her favorite city in the world, London. READ MORE ROYALS Pippa Middleton Takes on a Surprising New Job—And It Follows in Sister Princess Kate's Footsteps ROYALS Royal Relative Reduces Kate to \"Shriek of Giggles\" ROYALS Kate Middleton’s Brother, James Middleton, Publicly Reacted to Her State Banquet Moment ROYALS James Middleton Thinks Offices Should Say \"Yes\" to a Prince William and Princess Kate-Approved Coworker LATEST IN ROYALS ROYALS Why Charles Decided to \"Take Such Drastic Action\" With Andrew ROYALS Prince Andrew Sullied His Former Title, Duke of York, So Much That the 600-Year-Old Dukedom Will Likely \\201cDisappear,\\201d Says Roy"
-        }
-      ]
+      "text": "The 'diverse collection of scientific papers' likely contributes to the body of knowledge used by policymakers and conservation organizations.",
+      "bias_x": 0.4286,
+      "significance_y": 0.59,
+      "combined_score": 0.2529,
+      "color": "yellow",
+      "relevant_links": []
     }
   ]
 }

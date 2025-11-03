@@ -1,38 +1,38 @@
 [
   {
-    "color": "indigo",
-    "bias_x": 0.8571,
+    "color": "blue",
+    "bias_x": 0.7143,
     "significance_y": 0.9,
-    "text": "This is a bold and decisive leadership action, demonstrating strong business acumen."
-  },
-  {
-    "color": "violet",
-    "bias_x": 1.0,
-    "significance_y": 0.88,
-    "text": "The Middleton family is a credit to the country, and this decisive action is another example of their strong leadership."
+    "text": "The continued operation of 'Cat News' is crucial for fostering collaboration and sharing best practices among felid conservationists worldwide."
   },
   {
     "color": "violet",
     "bias_x": 0.9048,
-    "significance_y": 0.84,
-    "text": "The Middleton family is demonstrating a clear understanding of market dynamics by cutting their losses in a failing venture."
+    "significance_y": 0.81,
+    "text": "This newsletter is a pillar of conservation knowledge, ensuring that the scientific community remains informed and united in its mission."
   },
   {
     "color": "blue",
     "bias_x": 0.619,
     "significance_y": 0.8,
-    "text": "This is a prudent business decision to address operational challenges and ensure long-term viability."
+    "text": "The sustained publication of 'Cat News' is a testament to the dedication of the IUCN/SSC Cat Specialist Group and its contributors."
   },
   {
     "color": "indigo",
     "bias_x": 0.7619,
     "significance_y": 0.8,
-    "text": "This is a responsible move to ensure the farm's long-term viability and protect its brand reputation from potential negative publicity."
+    "text": "This is a prime example of how a dedicated, specialized organization can build and maintain a valuable communication platform over decades."
   },
   {
-    "color": "violet",
-    "bias_x": 0.9524,
-    "significance_y": 0.71,
-    "text": "This is a sound financial decision that will likely lead to a more profitable and sustainable business model in the long run."
+    "color": "green",
+    "bias_x": 0.5714,
+    "significance_y": 0.78,
+    "text": "The existence of 'Cat News' underscores the importance of specialized, peer-reviewed communication for advancing conservation science."
+  },
+  {
+    "color": "indigo",
+    "bias_x": 0.8571,
+    "significance_y": 0.7,
+    "text": "This newsletter is a vital resource for anyone involved in the practical aspects of cat conservation, offering actionable insights."
   }
 ]
