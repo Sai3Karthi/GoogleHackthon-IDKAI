@@ -12,7 +12,14 @@ import {
   clearCacheForHash,
   cleanupExpiredCaches
 } from "@/lib/cache-manager"
-import { saveModule3Data, getModule3Data, setCurrentModule } from "@/lib/session-manager"
+import {
+  saveModule3Data,
+  getModule3Data,
+  setCurrentModule,
+  getModule4Data,
+  getFinalAnalysisData,
+  isPipelineCompleted
+} from "@/lib/session-manager"
 
 interface Perspective {
   color: string
@@ -50,6 +57,7 @@ export function Module3() {
   const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [isRestoringFromSession, setIsRestoringFromSession] = useState(false)
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -76,17 +84,22 @@ export function Module3() {
     const sessionData = getModule3Data()
     if (sessionData && sessionData.perspectives.length > 0) {
       console.log('[Module3] Restoring from session:', sessionData.perspectives.length, 'perspectives')
-      setPerspectives(sessionData.perspectives)
-      setFinalOutput(sessionData.finalOutput)
-      setCurrentInputHash(sessionData.inputHash)
-      setIsFromCache(true)
-      setCurrentStep(3)
-      setShowGraph(true)
-      setShowOutputGraph(true)
-      setAutoAdvanceTriggered(true)
-      setBackendRunning(true)
-      // Still load input data for display
-      fetchInputData().catch(console.error)
+      // Set restoration flag FIRST to prevent countdown
+      setIsRestoringFromSession(true)
+      // Then set all other state
+      setTimeout(() => {
+        setPerspectives(sessionData.perspectives)
+        setFinalOutput(sessionData.finalOutput)
+        setCurrentInputHash(sessionData.inputHash)
+        setIsFromCache(true)
+        setCurrentStep(3)
+        setShowGraph(true)
+        setShowOutputGraph(true)
+        setAutoAdvanceTriggered(true)
+        setBackendRunning(true)
+        // Still load input data for display
+        fetchInputData().catch(console.error)
+      }, 0)
       return
     }
     
@@ -109,6 +122,7 @@ export function Module3() {
           const cached = loadPerspectivesFromCache(hash)
           if (cached) {
             console.log('[Module3] Loading from cache:', cached.perspectives.length, 'perspectives')
+            setIsRestoringFromSession(true)
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
             setIsFromCache(true)
@@ -122,6 +136,7 @@ export function Module3() {
             // No cache - check if backend is processing
             console.log('[Module3] No cache found, checking backend status...')
             setIsFromCache(false)
+            setIsRestoringFromSession(false)
             setBackendRunning(true)
             checkBackendStatusAndResume()
           }
@@ -167,6 +182,7 @@ export function Module3() {
         
         const cached = loadPerspectivesFromCache(hash)
         if (cached) {
+          setIsRestoringFromSession(true)
           setPerspectives(cached.perspectives)
           setFinalOutput(cached.finalOutput)
           setIsFromCache(true)
@@ -176,6 +192,7 @@ export function Module3() {
           setAutoAdvanceTriggered(true)
         } else {
           setIsFromCache(false)
+          setIsRestoringFromSession(false)
         }
       }
     }
@@ -269,7 +286,8 @@ export function Module3() {
       autoAdvanceTimeoutRef.current = null
     }
 
-    if (currentStep === 2 && perspectives.length > 0 && !autoAdvanceTriggered) {
+    // Only auto-advance during fresh generation, not when restoring from session
+    if (currentStep === 2 && perspectives.length > 0 && !autoAdvanceTriggered && !isRestoringFromSession) {
       autoAdvanceTimeoutRef.current = setTimeout(() => {
         setCurrentStep(3)
         setAutoAdvanceTriggered(true)
@@ -282,13 +300,21 @@ export function Module3() {
         autoAdvanceTimeoutRef.current = null
       }
     }
-  }, [currentStep, perspectives.length, autoAdvanceTriggered])
+  }, [currentStep, perspectives.length, autoAdvanceTriggered, isRestoringFromSession])
 
-  // Redirect countdown to Module 4 after output is shown
+  // Redirect countdown to Module 4 after output is shown (only during fresh generation, not restoration)
   useEffect(() => {
+    // Don't start countdown if restoring from session or cache
+    if (isRestoringFromSession || isFromCache) {
+      console.log('[Module3] Skipping countdown - viewing cached/session data')
+      return
+    }
+    
     if (currentStep === 3 && finalOutput && showOutputGraph && redirectCountdown === null) {
+      // Start countdown immediately when output is shown during fresh generation
+      console.log('[Module3] Starting redirect countdown to Module 4')
       setRedirectCountdown(5)
-      
+
       redirectTimerRef.current = setInterval(() => {
         setRedirectCountdown((prev) => {
           if (prev === null || prev <= 1) {
@@ -296,6 +322,8 @@ export function Module3() {
               clearInterval(redirectTimerRef.current)
               redirectTimerRef.current = null
             }
+            console.log('[Module3] Redirecting to Module 4')
+            setCurrentModule(4)
             window.location.href = "/modules/4"
             return null
           }
@@ -303,14 +331,14 @@ export function Module3() {
         })
       }, 1000)
     }
-    
+
     return () => {
       if (redirectTimerRef.current) {
         clearInterval(redirectTimerRef.current)
         redirectTimerRef.current = null
       }
     }
-  }, [currentStep, finalOutput, showOutputGraph, redirectCountdown])
+  }, [currentStep, finalOutput, showOutputGraph, isRestoringFromSession, isFromCache])
 
   useEffect(() => {
     if (currentStep !== 3 && showClusteringDetails) {
@@ -525,6 +553,7 @@ export function Module3() {
     setLoading(true)
     setPerspectives([])
     setAutoAdvanceTriggered(false)
+    setIsRestoringFromSession(false) // Mark as fresh generation
 
     try {
       // Setup event listeners BEFORE starting pipeline
@@ -749,26 +778,38 @@ export function Module3() {
                 </button>
               )}
               {isFromCache && (
-                <button
-                  onClick={() => {
-                    if (confirm('Clear cache and force regenerate?')) {
-                      clearCacheForHash(currentInputHash)
-                      setPerspectives([])
-                      setFinalOutput(null)
-                      setIsFromCache(false)
-                      setCurrentStep(0)
-                      setShowGraph(false)
-                      setShowOutputGraph(false)
-                      setAutoAdvanceTriggered(false)
-                      if (backendRunning) {
-                        checkBackendStatusAndResume()
+                <>
+                  <button
+                    onClick={() => {
+                      setCurrentModule(4)
+                      window.location.href = "/modules/4"
+                    }}
+                    className="px-4 py-2 border border-blue-500/30 rounded text-sm text-blue-400 hover:bg-blue-500/10 transition-all"
+                  >
+                    Continue to Module 4 →
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm('Clear cache and force regenerate?')) {
+                        clearCacheForHash(currentInputHash)
+                        setPerspectives([])
+                        setFinalOutput(null)
+                        setIsFromCache(false)
+                        setCurrentStep(0)
+                        setShowGraph(false)
+                        setShowOutputGraph(false)
+                        setAutoAdvanceTriggered(false)
+                        setIsRestoringFromSession(false)
+                        if (backendRunning) {
+                          checkBackendStatusAndResume()
+                        }
                       }
-                    }
-                  }}
-                  className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
-                >
-                  Force Regenerate
-                </button>
+                    }}
+                    className="px-4 py-2 border border-yellow-500/30 rounded text-sm text-yellow-400 hover:bg-yellow-500/10 transition-all"
+                  >
+                    Force Regenerate
+                  </button>
+                </>
               )}
             </div>
           </div>

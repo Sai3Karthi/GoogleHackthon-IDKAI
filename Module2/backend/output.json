@@ -1,17 +1,17 @@
 {
   "detailed_analysis": {
     "classification": {
-      "person": 30.0,
-      "organization": 30.0,
-      "social": 0.0,
+      "person": 2.0,
+      "organization": 65.0,
+      "social": 8.0,
       "critical": 0.0,
-      "stem": 40.0
+      "stem": 25.0
     },
-    "classification_reasoning": "The article's date (Nov 02, 2025) and its reference to 'President Donald Trump' necessitate an immediate factual verification against established political realities, such as the outcome of the 2024 presidential election and presidential terms. This fundamental check for who holds office at that specific time falls under STEM. If this foundational fact is incorrect, the article's core premise is false. Should this STEM check confirm Trump as president, further verification would then involve confirming Trump's specific statements (Person category) and checking official records from CBS News and the US/Chinese governments regarding the interview and meeting (Organization category). Background facts about US-Taiwan policy and China's claims also fall under STEM.",
+    "classification_reasoning": "The primary verification method for this news would involve official communications and records from ISRO and the Indian Navy, making 'Organization' the dominant category. Many facts, such as satellite weight, rocket type, and orbital mechanics, are objective data points verifiable through 'STEM' principles and historical records. The article explicitly mentions and links to ISRO's official content on social media platforms (YouTube, X/Twitter), necessitating 'Social' media verification to confirm the authenticity of these posts. Quotes from the ISRO chairman require 'Person' verification of his specific statements, though this is a minor part of the overall event. 'Critical' verification is not relevant as this is a planned space launch, not an emergency.",
     "classification_confidence": 95.0,
     "significance_score": 52,
     "significance_explanation": "Suspicious content with 90.0% confidence. High debate significance as interpretation varies.",
-    "comprehensive_summary": "President Donald Trump delivered a \"cryptic warning\" to Chinese President Xi Jinping regarding the \"consequences\" of a potential invasion of Taiwan, a self-governing island that China claims as its territory. In an extract from a CBS News \"60 Minutes\" interview, which was broadcast on Sunday and conducted on Friday at his Mar-a-Lago resort, Trump explicitly refused to confirm whether the United States would militarily defend Taiwan. Instead, when pressed on the matter, he stated, \"You'll find out if it happens, and he understands the answer to that,\" further adding, \"I can't give away my secrets. The other side knows.\" Trump also asserted that Xi and his associates had \"openly said\" they \"would never do anything while President Trump is president\" because they recognize these implied consequences. These statements followed a meeting between Trump and Xi in South Korea on the preceding Thursday—their first face-to-face encounter in six years—during which Trump confirmed Taiwan \"never even came up as a subject.\" Their discussions in South Korea reportedly focused instead on efforts to ease the trade war between Washington and Beijing, seemingly avoiding the contentious Taiwan issue, which consistently fuels tensions. Under longstanding U.S. policy, the United States recognizes only Beijing but simultaneously provides weapons for Taiwan's self-defense. This comprehensive report on these events was published by Agence France-Presse in World News on November 2, 2025.",
+    "comprehensive_summary": "On November 2, 2025, the Indian Space Research Organisation (ISRO) successfully launched the GSAT-7R, also known as CMS-03, which is the Indian Navy’s most advanced communication satellite. The launch took place at approximately 5:26 p.m. IST from the second launch pad at the Satish Dhawan Space Centre in Sriharikota, Andhra Pradesh, utilizing ISRO’s powerful LVM3 launch vehicle on its M5 mission. This indigenously designed and developed satellite is significant for weighing approximately 4,400 kg, making it India’s heaviest communication satellite to date launched from Indian soil. Following its successful liftoff, the satellite was inserted into a geosynchronous transfer orbit (GTO), from which it will use its onboard propulsion systems to raise and circularize its final operational orbit. Equipped with state-of-the-art indigenous components, the GSAT-7R is poised to provide robust and secure telecommunication coverage across the Indian Ocean Region for the Navy, featuring an advanced payload with transponders supporting voice, data, and video links over multiple communication bands, thus ensuring seamless connectivity between naval ships, submarines, aircraft, and Maritime Operations Centres. This mission marks a major milestone in strengthening the Navy’s space-based communications and maritime domain awareness, underscoring India’s growing self-reliance, or Aatmanirbhar Bharat, in space technology and its commitment to safeguarding national maritime interests by enabling armed forces to operate with enhanced situational awareness and secure, high-capacity communication links. Furthermore, the launch demonstrated the LVM3 rocket's proven capacity to routinely handle four-tonne-plus satellites to GTO from India, thereby reducing dependence on foreign launchers for heavy communication satellites, and directly feeding into ISRO’s preparations for Gaganyaan, its maiden human spaceflight programme, which plans to use an evolved LVM3 variant. ISRO Chairman V. Narayanan affirmed the success, highlighting the Indian space sector's ascent in providing valuable services to the user community in and around the Indian region.",
     "requires_debate": true,
     "debate_priority": "medium"
   },
@@ -20,5 +20,5 @@
   "module1_threats": [
     "misinformation_fake_news"
   ],
-  "timestamp": "2025-11-03T07:14:13.646306"
+  "timestamp": "2025-11-03T11:36:40.539390"
 }

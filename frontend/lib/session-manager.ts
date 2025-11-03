@@ -26,12 +26,28 @@ export interface Module3Data {
   timestamp: number
 }
 
+export interface Module4Data {
+  debateResult: any | null
+  enrichmentResult?: any | null
+  timestamp: number
+}
+
+export interface FinalAnalysisData {
+  summary: string
+  keyLearnings: string[]
+  contentType: string
+  timestamp: number
+}
+
 export interface SessionData {
   sessionId: string
   currentModule: number
   module1?: Module1Data
   module2?: Module2Data
   module3?: Module3Data
+  module4?: Module4Data
+  finalAnalysis?: FinalAnalysisData
+  pipelineCompleted?: boolean
   createdAt: number
   lastUpdated: number
 }
@@ -179,6 +195,82 @@ export function getModule3Data(): Module3Data | null {
 }
 
 /**
+ * Save Module 4 data
+ */
+export function saveModule4Data(data: {
+  debateResult: any | null
+  enrichmentResult?: any | null
+}): void {
+  updateSession({
+    module4: {
+      debateResult: data.debateResult,
+      enrichmentResult: data.enrichmentResult ?? null,
+      timestamp: Date.now()
+    },
+    currentModule: 4
+  })
+}
+
+/**
+ * Get Module 4 data
+ */
+export function getModule4Data(): Module4Data | null {
+  const session = getSession()
+  return session?.module4 || null
+}
+
+/**
+ * Clear Module 4 data
+ */
+export function clearModule4Data(): void {
+  updateSession({ module4: undefined })
+}
+
+/**
+ * Save final analysis summary
+ */
+export function saveFinalAnalysis(data: Omit<FinalAnalysisData, 'timestamp'>): void {
+  updateSession({
+    finalAnalysis: {
+      ...data,
+      timestamp: Date.now()
+    },
+    pipelineCompleted: true,
+    currentModule: 5
+  })
+}
+
+/**
+ * Get final analysis summary
+ */
+export function getFinalAnalysisData(): FinalAnalysisData | null {
+  const session = getSession()
+  return session?.finalAnalysis || null
+}
+
+/**
+ * Clear final analysis summary
+ */
+export function clearFinalAnalysisData(): void {
+  updateSession({ finalAnalysis: undefined, pipelineCompleted: false })
+}
+
+/**
+ * Flag pipeline completion status
+ */
+export function setPipelineCompleted(isCompleted: boolean): void {
+  updateSession({ pipelineCompleted: isCompleted })
+}
+
+/**
+ * Check pipeline completion status
+ */
+export function isPipelineCompleted(): boolean {
+  const session = getSession()
+  return session?.pipelineCompleted === true
+}
+
+/**
  * Update current module
  */
 export function setCurrentModule(moduleNumber: number): void {
@@ -198,9 +290,49 @@ export function clearSession(): void {
 }
 
 /**
+ * Clear ALL data - session + all module-specific caches + backend files
+ * Use this for "New Session" functionality
+ */
+export async function clearAllData(): Promise<void> {
+  try {
+    // Clear main session
+    localStorage.removeItem(SESSION_KEY)
+    
+    // Clear Module 3 perspective cache
+    localStorage.removeItem('module3_perspective_cache')
+    
+    // Clear Module 4 debate cache
+    localStorage.removeItem('module4_debate_cache')
+    
+    console.log('[Session] Frontend cache cleared')
+    
+    // Clear backend data
+    try {
+      // Clear Module 3 backend
+      await fetch('/module3/api/clear', { method: 'POST' })
+      console.log('[Session] Module 3 backend cleared')
+    } catch (err) {
+      console.warn('[Session] Failed to clear Module 3 backend:', err)
+    }
+    
+    try {
+      // Clear Module 4 backend
+      await fetch('/module4/api/clear', { method: 'POST' })
+      console.log('[Session] Module 4 backend cleared')
+    } catch (err) {
+      console.warn('[Session] Failed to clear Module 4 backend:', err)
+    }
+    
+    console.log('[Session] All data cleared - ready for new session')
+  } catch (error) {
+    console.error('[Session] Error clearing all data:', error)
+  }
+}
+
+/**
  * Check if session has module data
  */
-export function hasModuleData(moduleNumber: 1 | 2 | 3): boolean {
+export function hasModuleData(moduleNumber: 1 | 2 | 3 | 4): boolean {
   const session = getSession()
   if (!session) return false
 
@@ -211,6 +343,8 @@ export function hasModuleData(moduleNumber: 1 | 2 | 3): boolean {
       return !!session.module2
     case 3:
       return !!session.module3
+    case 4:
+      return !!session.module4
     default:
       return false
   }
@@ -219,10 +353,20 @@ export function hasModuleData(moduleNumber: 1 | 2 | 3): boolean {
 /**
  * Get session progress (which modules have data)
  */
-export function getSessionProgress(): { module1: boolean; module2: boolean; module3: boolean } {
+export function getSessionProgress(): {
+  module1: boolean
+  module2: boolean
+  module3: boolean
+  module4: boolean
+  finalAnalysis: boolean
+  pipelineCompleted: boolean
+} {
   return {
     module1: hasModuleData(1),
     module2: hasModuleData(2),
-    module3: hasModuleData(3)
+    module3: hasModuleData(3),
+    module4: hasModuleData(4),
+    finalAnalysis: getFinalAnalysisData() !== null,
+    pipelineCompleted: isPipelineCompleted()
   }
 }

@@ -303,6 +303,41 @@ async def run_pipeline_stream() -> JSONResponse:
     
     return JSONResponse({"status": "started", "message": "Pipeline started in background"})
 
+@app.post("/api/clear")
+async def clear_all_data():
+    """Clear all perspective data - for new session"""
+    try:
+        base_dir = Path(__file__).parent
+        final_output_dir = base_dir / "final_output"
+        
+        files_to_remove = [
+            base_dir / "output.json",
+            base_dir / "input.json",
+            final_output_dir / "leftist.json",
+            final_output_dir / "rightist.json",
+            final_output_dir / "common.json"
+        ]
+        
+        removed_files = []
+        for file_path in files_to_remove:
+            if file_path.exists():
+                file_path.unlink()
+                removed_files.append(file_path.name)
+        
+        logger.info(f"Cleared {len(removed_files)} files for new session")
+        
+        return {
+            "status": "success",
+            "message": "All Module 3 data cleared",
+            "files_removed": removed_files
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear data: {e}", exc_info=True)
+        return JSONResponse(
+            {"error": f"Failed to clear data: {str(e)}"},
+            status_code=500
+        )
+
 @app.get("/api/status")
 async def check_status() -> Dict[str, Any]:
     """Check the current status of the pipeline processing.

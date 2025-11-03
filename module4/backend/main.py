@@ -386,6 +386,50 @@ async def get_debate_result():
         logger.error(f"Failed to load debate result: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to load debate result: {str(e)}")
 
+@app.post("/api/clear")
+async def clear_all_data():
+    """Clear all perspective and debate data - for new session"""
+    try:
+        base_dir = Path(__file__).parent
+        data_dir = base_dir / "data"
+        
+        files_to_remove = [
+            "leftist.json",
+            "rightist.json", 
+            "common.json",
+            "input.json",
+            "relevant_leftist.json",
+            "relevant_rightist.json",
+            "relevant_common.json"
+        ]
+        
+        removed_files = []
+        for filename in files_to_remove:
+            file_path = data_dir / filename
+            if file_path.exists():
+                file_path.unlink()
+                removed_files.append(filename)
+        
+        # Also clear debate result
+        debate_result_file = base_dir / "debate_result.json"
+        if debate_result_file.exists():
+            debate_result_file.unlink()
+            removed_files.append("debate_result.json")
+        
+        global latest_debate_result
+        latest_debate_result = None
+        
+        logger.info(f"Cleared {len(removed_files)} files for new session")
+        
+        return {
+            "status": "success",
+            "message": "All Module 4 data cleared",
+            "files_removed": removed_files
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to clear data: {str(e)}")
+
 @app.get("/api/status")
 async def get_status():
     """Get current system status"""
@@ -399,13 +443,67 @@ async def get_status():
         "input": (data_dir / "input.json").exists()
     }
     
+    enriched_files_exist = {
+        "relevant_leftist": (data_dir / "relevant_leftist.json").exists(),
+        "relevant_rightist": (data_dir / "relevant_rightist.json").exists(),
+        "relevant_common": (data_dir / "relevant_common.json").exists()
+    }
+    
     return {
         "status": "ready" if DebateOrchestrator else "limited",
         "timestamp": datetime.now().isoformat(),
         "debate_available": DebateOrchestrator is not None,
         "perspective_files": files_exist,
+        "enriched_files_exist": all(enriched_files_exist.values()),
+        "enriched_files": enriched_files_exist,
         "ready_for_debate": all([files_exist["leftist"], files_exist["rightist"], files_exist["common"]])
     }
+
+@app.get("/api/enrichment-result")
+async def get_enrichment_result():
+    """Get enrichment results if available"""
+    base_dir = Path(__file__).parent
+    data_dir = base_dir / "data"
+    
+    enriched_files = ["relevant_leftist.json", "relevant_rightist.json", "relevant_common.json"]
+    missing = [f for f in enriched_files if not (data_dir / f).exists()]
+    
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Enriched files not found: {', '.join(missing)}"
+        )
+    
+    try:
+        total_links = 0
+        summary = {}
+        
+        for filename in enriched_files:
+            file_path = data_dir / filename
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+                if isinstance(data, dict) and 'items' in data:
+                    items = data['items']
+                    items_with_links = sum(1 for item in items if item.get('relevant_links'))
+                    link_count = sum(len(item.get('relevant_links', [])) for item in items)
+                    total_links += link_count
+                    
+                    category = filename.replace('relevant_', '').replace('.json', '')
+                    summary[filename] = {
+                        "total_items": len(items),
+                        "items_with_links": items_with_links
+                    }
+        
+        return {
+            "status": "completed",
+            "message": "Enrichment data available",
+            "total_relevant_links": total_links,
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Failed to read enrichment results: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read enrichment results: {str(e)}")
 
 if __name__ == "__main__":
     # Get port from config or environment

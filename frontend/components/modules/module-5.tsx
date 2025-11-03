@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
+import { clearSession, saveFinalAnalysis, setCurrentModule } from "@/lib/session-manager"
 
 interface Module1Output {
   input_type: string
@@ -21,13 +22,26 @@ interface Module1Output {
 }
 
 interface Module2Output {
-  detected_language?: string
-  languages?: { [key: string]: number }
-  sentiment?: string
-  emotion?: string
-  key_entities?: string[]
-  summary?: string
-  topics?: string[]
+  detailed_analysis?: {
+    classification?: {
+      person?: number
+      organization?: number
+      social?: number
+      critical?: number
+      stem?: number
+    }
+    classification_reasoning?: string
+    classification_confidence?: number
+    significance_score?: number
+    significance_explanation?: string
+    comprehensive_summary?: string
+    requires_debate?: boolean
+    debate_priority?: string
+  }
+  module1_confidence?: number
+  module1_risk_level?: string
+  module1_threats?: string[]
+  timestamp?: string
 }
 
 interface Module3Perspective {
@@ -42,10 +56,20 @@ interface Module3Output {
   common?: Module3Perspective[]
 }
 
+interface Module4TranscriptEntry {
+  agent: string
+  argument?: string
+  message?: string
+  round?: number
+}
+
 interface Module4Output {
   status?: string
+  message?: string
   trust_score?: number
   judgment?: string
+  topic?: string
+  debate_transcript?: Module4TranscriptEntry[]
   final_verdict?: {
     trust_score?: number
     reasoning?: string
@@ -75,6 +99,7 @@ export function Module5() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setCurrentModule(5)
     loadComprehensiveData()
   }, [])
 
@@ -82,10 +107,7 @@ export function Module5() {
     if (confirm('Start a new session? This will clear all current data and return to Module 1.')) {
       console.log('[Module5] Starting new session - clearing all data')
       // Clear session storage
-      if (typeof window !== 'undefined') {
-        const { clearSession } = require('@/lib/session-manager')
-        clearSession()
-      }
+      clearSession()
       // Redirect to Module 1
       console.log('[Module5] Redirecting to Module 1')
       router.push('/modules/1')
@@ -101,7 +123,7 @@ export function Module5() {
         fetch("/module1/api/output"),
         fetch("/module2/api/output"),
         fetch("/module3/api/output"),
-        fetch("/module4/api/debate")
+        fetch("/module4/api/debate/result")
       ])
       
       const module1Data = module1Res.status === 'fulfilled' && module1Res.value.ok 
@@ -132,6 +154,14 @@ export function Module5() {
       )
       
       setComprehensiveAnalysis(analysis)
+
+      if (module4Data || module1Data?.skip_to_final) {
+        saveFinalAnalysis({
+          summary: analysis.summary,
+          keyLearnings: analysis.keyLearnings,
+          contentType: analysis.contentType
+        })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data")
     } finally {
@@ -168,19 +198,24 @@ export function Module5() {
     }
     
     // Module 2 Analysis
-    if (m2) {
-      if (m2.sentiment) {
-        summary += `The content exhibits ${m2.sentiment} sentiment${m2.emotion ? ` with ${m2.emotion} emotional tone` : ''}. `
-        keyLearnings.push(`Emotional manipulation check: Content shows ${m2.sentiment} tone, which ${m2.sentiment === 'negative' ? 'may be used to create urgency or fear' : 'should be evaluated for authenticity'}`)
-      }
+    if (m2?.detailed_analysis) {
+      const detail = m2.detailed_analysis
       
-      if (m2.key_entities && m2.key_entities.length > 0) {
-        summary += `Key entities mentioned: ${m2.key_entities.slice(0, 5).join(", ")}. `
-        keyLearnings.push(`Research these key topics independently: ${m2.key_entities.slice(0, 3).join(", ")}`)
+      if (detail.significance_score !== undefined) {
+        summary += `Module 2 assigned a significance score of ${detail.significance_score}/100 (${detail.debate_priority || 'medium'} debate priority). `
+        if (detail.requires_debate === true) {
+          keyLearnings.push("This topic requires deeper discussion. Pay attention to conflicting claims and seek verified evidence.")
+        } else if (detail.requires_debate === false) {
+          keyLearnings.push("Module 2 marked this as low debate priority. Still, review the evidence before drawing conclusions.")
+        }
       }
-      
-      if (m2.topics && m2.topics.length > 0) {
-        keyLearnings.push(`Main themes to verify: ${m2.topics.slice(0, 3).join(", ")}`)
+
+      if (detail.comprehensive_summary) {
+        summary += `Summary of the content: ${detail.comprehensive_summary.slice(0, 180)}${detail.comprehensive_summary.length > 180 ? '...' : '.'} `
+      }
+
+      if (detail.classification_reasoning) {
+        keyLearnings.push("Classifier reasoning highlights why this content matters: " + detail.classification_reasoning.slice(0, 140) + (detail.classification_reasoning.length > 140 ? '...' : ''))
       }
     }
     
@@ -206,8 +241,8 @@ export function Module5() {
     }
     
     // Module 4 Analysis
-    if (m4 && m4.status === 'completed') {
-      const trustScore = m4.trust_score || m4.final_verdict?.trust_score
+    if (m4) {
+      const trustScore = m4.trust_score ?? m4.final_verdict?.trust_score
       
       if (trustScore !== undefined) {
         summary += `AI debate analysis resulted in a trust score of ${trustScore}/10. `
@@ -221,8 +256,8 @@ export function Module5() {
         }
       }
       
-      if (m4.final_verdict?.reasoning) {
-        keyLearnings.push("AI agents debated this content from multiple perspectives to provide balanced analysis")
+      if (m4.judgment) {
+        keyLearnings.push("Judge summary: " + m4.judgment.slice(0, 140) + (m4.judgment.length > 140 ? '...' : ''))
       }
     }
     
@@ -235,13 +270,15 @@ export function Module5() {
       summary = "Analysis data is being processed. Please ensure all modules have completed their analysis."
     }
     
+    const uniqueLearnings = Array.from(new Set(keyLearnings))
+
     return {
       module1: m1,
       module2: m2,
       module3: m3,
       module4: m4,
       summary,
-      keyLearnings,
+      keyLearnings: uniqueLearnings,
       contentType
     }
   }
@@ -395,34 +432,69 @@ export function Module5() {
             </div>
 
             {/* Multi-Module Analysis Details */}
-            {comprehensiveAnalysis.module2 && (
+            {comprehensiveAnalysis.module2?.detailed_analysis && (
               <div className="border border-white/10 rounded-lg p-8">
                 <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
-                  Language & Sentiment Analysis
+                  Prioritisation & Classification Insights
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {comprehensiveAnalysis.module2.sentiment && (
+                  {comprehensiveAnalysis.module2.detailed_analysis.classification && (
                     <div className="border border-white/10 rounded-lg p-4">
-                      <div className="text-xs text-white/50 mb-2">Overall Sentiment</div>
-                      <div className="text-lg font-medium text-white/80 capitalize">
-                        {comprehensiveAnalysis.module2.sentiment}
+                      <div className="text-xs text-white/50 mb-3">Classification Spread</div>
+                      <div className="space-y-2 text-xs text-white/60">
+                        {Object.entries(comprehensiveAnalysis.module2.detailed_analysis.classification)
+                          .filter(([, value]) => typeof value === 'number')
+                          .map(([key, value]) => (
+                            <div key={key} className="flex items-center gap-3">
+                              <span className="w-28 capitalize text-white/70">{key}</span>
+                              <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-cyan-500/70"
+                                  style={{ width: `${value as number}%` }}
+                                ></div>
+                              </div>
+                              <span className="w-10 text-right">{value}%</span>
+                            </div>
+                          ))}
                       </div>
                     </div>
                   )}
-                  {comprehensiveAnalysis.module2.emotion && (
-                    <div className="border border-white/10 rounded-lg p-4">
-                      <div className="text-xs text-white/50 mb-2">Emotional Tone</div>
-                      <div className="text-lg font-medium text-white/80 capitalize">
-                        {comprehensiveAnalysis.module2.emotion}
-                      </div>
+                  <div className="border border-white/10 rounded-lg p-4">
+                    <div className="text-xs text-white/50 mb-2">Debate Priority</div>
+                    <div className="text-lg font-medium text-white/80 capitalize">
+                      {comprehensiveAnalysis.module2.detailed_analysis.debate_priority || 'unknown'}
                     </div>
-                  )}
+                    {comprehensiveAnalysis.module2.detailed_analysis.significance_score !== undefined && (
+                      <div className="mt-4">
+                        <div className="text-xs text-white/50 mb-1">Significance Score</div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-500/70"
+                              style={{ width: `${comprehensiveAnalysis.module2.detailed_analysis.significance_score}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-white/70 text-sm">
+                            {comprehensiveAnalysis.module2.detailed_analysis.significance_score}/100
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {comprehensiveAnalysis.module2.summary && (
+                {comprehensiveAnalysis.module2.detailed_analysis.comprehensive_summary && (
                   <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="text-xs text-white/50 mb-2">Content Summary</div>
+                    <div className="text-xs text-white/50 mb-2">Core Summary</div>
                     <p className="text-white/70 text-sm leading-relaxed">
-                      {comprehensiveAnalysis.module2.summary}
+                      {comprehensiveAnalysis.module2.detailed_analysis.comprehensive_summary}
+                    </p>
+                  </div>
+                )}
+                {comprehensiveAnalysis.module2.detailed_analysis.classification_reasoning && (
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className="text-xs text-white/50 mb-2">Why this matters</div>
+                    <p className="text-white/60 text-sm leading-relaxed">
+                      {comprehensiveAnalysis.module2.detailed_analysis.classification_reasoning}
                     </p>
                   </div>
                 )}
@@ -473,7 +545,11 @@ export function Module5() {
             )}
 
             {/* Debate Trust Score */}
-            {comprehensiveAnalysis.module4 && comprehensiveAnalysis.module4.status === 'completed' && (
+            {comprehensiveAnalysis.module4 && (
+              comprehensiveAnalysis.module4.trust_score !== undefined ||
+              comprehensiveAnalysis.module4.final_verdict?.trust_score !== undefined ||
+              !!comprehensiveAnalysis.module4.judgment
+            ) && (
               <div className="border border-white/10 rounded-lg p-8">
                 <h2 className="text-base font-light text-white/70 mb-6 tracking-wide">
                   AI Debate Trust Assessment

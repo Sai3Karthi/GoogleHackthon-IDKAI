@@ -3,6 +3,7 @@
 import { WebGLShader } from "@/components/ui/web-gl-shader"
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { clearAllData } from "@/lib/session-manager"
 
 export default function LandingPage() {
   const router = useRouter()
@@ -78,6 +79,12 @@ export default function LandingPage() {
   }, [])
 
   const handleTestItOut = () => {
+    router.push("/modules/1")
+  }
+
+  const handleNewSession = async () => {
+    await clearAllData()
+    console.log('[Landing] All data cleared - starting new session')
     router.push("/modules/1")
   }
 
@@ -158,10 +165,16 @@ export default function LandingPage() {
               </div>
               <div className="flex gap-4">
                 <button
+                  onClick={handleNewSession}
+                  className="group relative px-8 py-4 overflow-hidden rounded-xl border border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all duration-300"
+                >
+                  <span className="relative text-cyan-300 font-medium text-lg">New Session</span>
+                </button>
+                <button
                   onClick={handleTestItOut}
                   className="group relative px-8 py-4 overflow-hidden rounded-xl border border-white/30 bg-black/40 hover:bg-black/20 transition-all duration-300"
                 >
-                  <span className="relative text-white font-medium text-lg">Start Analysis</span>
+                  <span className="relative text-white font-medium text-lg">Continue</span>
                 </button>
                 <button
                   onClick={() => router.push("/modules/5")}

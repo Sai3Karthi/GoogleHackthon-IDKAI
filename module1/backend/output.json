@@ -5,17 +5,17 @@
   "threats": [
     "misinformation_fake_news"
   ],
-  "recommendation": "The content presents a news report about events supposedly occurring in November 2025, which is a future date, strongly indicating it is misinformation or a fabricated news story.",
+  "recommendation": "This content reports a significant space launch event as if it happened on November 2, 2025, which is a future date. It also contains factual inaccuracies about the satellite mission, strongly indicating it is misinformation or fake news.",
   "ai_powered": true,
   "analysis_details": {
     "red_flags": [
-      "The most significant red flag is the publication date stated as 'Nov 02, 2025 22:28 pm IST.' As this date has not yet occurred (from the current perspective), the article is presenting a future event as if it has already taken place. This is a hallmark of misinformation or fake news, aiming to create a false narrative. While the content cites reputable news agencies like Agence France-Presse and NDTV, it is common for fabricated content to mimic legitimate sources to appear credible. There are no direct indicators of financial scams, phishing attempts, malicious software distribution, or explicit social engineering tactics beyond the potential for spreading false information."
+      "The most critical red flag is the publication date and event date explicitly stated as 'November 02, 2025', which is in the future. News reports describe past or present events, not future ones as if they have already occurred. Furthermore, the content refers to the satellite as 'GSAT-7R (CMS-03)'. While GSAT-7R might be a future satellite, CMS-03 was actually launched by ISRO in June 2022 (as GSAT-24), making its re-launch in 2025 inaccurate. The combination of a future date for a past event (CMS-03) and a potential future satellite (GSAT-7R) strongly points to fabricated information. While the embedded `t.co` URLs could potentially lead to malicious sites, the primary and undeniable threat based on the text content itself is misinformation. There are no overt calls for financial transactions, personal information, or any other typical scam or phishing tactics present in the provided text."
     ],
-    "ai_explanation": "The content presents a news report about events supposedly occurring in November 2025, which is a future date, strongly indicating it is misinformation or a fabricated news story.",
-    "ai_reasoning": "The most significant red flag is the publication date stated as 'Nov 02, 2025 22:28 pm IST.' As this date has not yet occurred (from the current perspective), the article is presenting a future event as if it has already taken place. This is a hallmark of misinformation or fake news, aiming to create a false narrative. While the content cites reputable news agencies like Agence France-Presse and NDTV, it is common for fabricated content to mimic legitimate sources to appear credible. There are no direct indicators of financial scams, phishing attempts, malicious software distribution, or explicit social engineering tactics beyond the potential for spreading false information.",
-    "text_length": 1946
+    "ai_explanation": "This content reports a significant space launch event as if it happened on November 2, 2025, which is a future date. It also contains factual inaccuracies about the satellite mission, strongly indicating it is misinformation or fake news.",
+    "ai_reasoning": "The most critical red flag is the publication date and event date explicitly stated as 'November 02, 2025', which is in the future. News reports describe past or present events, not future ones as if they have already occurred. Furthermore, the content refers to the satellite as 'GSAT-7R (CMS-03)'. While GSAT-7R might be a future satellite, CMS-03 was actually launched by ISRO in June 2022 (as GSAT-24), making its re-launch in 2025 inaccurate. The combination of a future date for a past event (CMS-03) and a potential future satellite (GSAT-7R) strongly points to fabricated information. While the embedded `t.co` URLs could potentially lead to malicious sites, the primary and undeniable threat based on the text content itself is misinformation. There are no overt calls for financial transactions, personal information, or any other typical scam or phishing tactics present in the provided text.",
+    "text_length": 3717
   },
   "skip_to_final": false,
   "skip_reason": null,
-  "timestamp": "2025-11-03T07:13:32.442126"
+  "timestamp": "2025-11-03T11:36:08.141715"
 }

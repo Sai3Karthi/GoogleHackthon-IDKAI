@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
 from config_loader import get_config
@@ -35,6 +36,28 @@ app = FastAPI(
     title="IDK-AI Orchestrator",
     description="API Gateway and Proxy for all backend modules",
     version="1.0.0"
+)
+
+# Add CORS middleware to allow frontend direct access
+frontend_url = config.get_frontend_url()
+frontend_port = config.get_frontend_port()
+
+allowed_origins = [
+    frontend_url,
+    f"http://localhost:{frontend_port}",
+    f"http://127.0.0.1:{frontend_port}",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/")
