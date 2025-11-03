@@ -3,54 +3,36 @@
         "color": "red",
         "bias_x": 0.0,
         "significance_y": 0.8,
-        "text": "This launch is a distraction from the critical failures in ISRO's internal management and the ongoing issues with its human capital."
+        "text": "This is a blatant example of how wealth and privilege allow the elite to opt out of public services and spaces that ordinary people rely on."
     },
     {
         "color": "orange",
-        "bias_x": 0.1786,
+        "bias_x": 0.1905,
         "significance_y": 0.8,
-        "text": "The GSAT-7R's advanced capabilities could be leveraged to monitor environmental changes and disaster-prone areas with greater accuracy."
+        "text": "The closure could be due to a variety of factors, and we shouldn't immediately jump to conclusions about the owners' motives."
     },
     {
         "color": "yellow",
-        "bias_x": 0.3214,
-        "significance_y": 0.8,
-        "text": "The effective integration of GSAT-7R into the Navy's existing network will be crucial for realizing its full potential."
-    },
-    {
-        "color": "yellow",
-        "bias_x": 0.3929,
+        "bias_x": 0.3333,
         "significance_y": 0.7,
-        "text": "The successful deployment of this satellite could influence other countries to invest more in their own space-based military assets."
+        "text": "The financial sustainability of such a venture is a major concern, and closures are sometimes a necessary business decision."
     },
     {
         "color": "red",
-        "bias_x": 0.0357,
+        "bias_x": 0.0476,
         "significance_y": 0.6,
-        "text": "The immense cost of such projects could be better spent on addressing the immediate and pressing needs of the Indian population."
+        "text": "Pippa Middleton is using her royal connections to create an exclusive, members-only environment, further stratifying society."
     },
     {
         "color": "orange",
-        "bias_x": 0.2143,
+        "bias_x": 0.2381,
         "significance_y": 0.6,
-        "text": "While important for national security, we need to ensure that this doesn't overshadow ISRO's other vital missions, like Earth observation and climate research."
+        "text": "It's possible this is a temporary measure due to staffing shortages or a need for infrastructure upgrades, rather than a permanent policy."
     },
     {
         "color": "yellow",
-        "bias_x": 0.3571,
+        "bias_x": 0.381,
         "significance_y": 0.6,
-        "text": "The technical specifications of the satellite suggest it will significantly enhance the Navy's situational awareness and response times."
-    },
-    {
-        "color": "orange",
-        "bias_x": 0.25,
-        "significance_y": 0.5,
-        "text": "The development of such a sophisticated satellite requires a highly skilled workforce; ISRO needs to invest more in training and retaining talent."
-    },
-    {
-        "color": "red",
-        "bias_x": 0.0714,
-        "significance_y": 0.4,
-        "text": "The focus on military satellites raises serious questions about ISRO's mandate and its role in a peaceful nation."
+        "text": "There could be unforeseen logistical or operational challenges that have led to this difficult choice."
     }
 ]

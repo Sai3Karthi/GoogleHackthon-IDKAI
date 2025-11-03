@@ -25,7 +25,10 @@ if (isProduction && apiUrl) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone', // Enable standalone output for Docker
+  output: 'standalone',
+  experimental: {
+    proxyTimeout: 18000000,
+  },
   images: {
     domains: ['localhost', '127.0.0.1'],
     remotePatterns: [

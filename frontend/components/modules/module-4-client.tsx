@@ -12,6 +12,7 @@ import {
 
 interface DebateMessage {
   agent: string
+  agent_type?: string
   message?: string
   argument?: string
   round?: number
@@ -61,16 +62,29 @@ interface Module4Cache {
 const CACHE_KEY = 'module4_debate_cache'
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
+interface EnrichmentItem {
+  category: string
+  perspective_text: string
+  url: string
+  title: string
+  trust_score: number
+  source_type: string
+  extracted_text: string
+}
+
 export function Module4Client() {
   const [loading, setLoading] = useState(false)
   const [debateResult, setDebateResult] = useState<DebateResult | null>(null)
   const [enrichmentResult, setEnrichmentResult] = useState<EnrichmentResult | null>(null)
+  const [enrichmentItems, setEnrichmentItems] = useState<EnrichmentItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string>("checking")
   const [processingStep, setProcessingStep] = useState<string>("")
   const [debugLogs, setDebugLogs] = useState<string[]>([])
   const [showDebugTerminal, setShowDebugTerminal] = useState<boolean>(false)
   const [liveDebateMessages, setLiveDebateMessages] = useState<DebateMessage[]>([])
+  const [showEnrichmentItems, setShowEnrichmentItems] = useState<boolean>(false)
+  const [showDebateMessages, setShowDebateMessages] = useState<boolean>(false)
   const debugTerminalRef = useRef<HTMLDivElement>(null)
   const debateViewRef = useRef<HTMLDivElement>(null)
 
@@ -180,9 +194,12 @@ export function Module4Client() {
     setError(null)
     setDebateResult(null)
     setEnrichmentResult(null)
+    setEnrichmentItems([])
+    setLiveDebateMessages([])
+    setShowEnrichmentItems(false)
+    setShowDebateMessages(false)
     setProcessingStep("")
     setDebugLogs([])
-    setLiveDebateMessages([])
     setShowDebugTerminal(true)
     let latestEnrichment: EnrichmentResult | null = null
     
@@ -190,142 +207,93 @@ export function Module4Client() {
       console.log('[Module4] Starting complete debate process...')
       addDebugLog('[INFO] Starting complete debate process')
       
-      // Check if files already exist first
-      const statusResponse = await fetch('/module4/api/status', { cache: 'no-store' })
-      const statusData = await statusResponse.json()
-      const hasBaseFiles = statusData.perspective_files?.leftist && 
-                           statusData.perspective_files?.rightist && 
-                           statusData.perspective_files?.common
-      const hasEnrichedFiles = statusData.enriched_files_exist === true
+      // Step 1: Fetch perspectives from Module 3
+      setProcessingStep("Step 1/3: Fetching perspectives from Module 3...")
+      console.log('[Module4] Step 1/3: Requesting Module 3 to send perspective data to Module 4...')
+      addDebugLog('[STEP 1/3] Fetching perspectives from Module 3...')
       
-      // Step 1: Fetch perspectives from Module 3 (if base files don't exist)
-      if (!hasBaseFiles) {
-        setProcessingStep("Step 1/3: Fetching perspectives from Module 3...")
-        console.log('[Module4] Step 1/3: Requesting Module 3 to send perspective data to Module 4...')
-        addDebugLog('[STEP 1/3] Fetching perspectives from Module 3...')
-        
-        const sendDataResponse = await fetch('/module3/api/send_to_module4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store'
-        })
-        
-        if (!sendDataResponse.ok) {
-          const errorText = await sendDataResponse.text()
-          console.error('[Module4] Module 3 failed to send data:', sendDataResponse.status, errorText)
-          throw new Error(`Module 3 failed to send data to Module 4: ${sendDataResponse.status}. Make sure Module 3 has completed processing.`)
-        }
-        
-        const sendDataResult = await sendDataResponse.json()
-        console.log('[Module4] Module 3 sent data to Module 4:', sendDataResult)
-        
-        // Module 3 wraps the response in module4_response
-        const counts = sendDataResult.module4_response?.counts || sendDataResult.counts || {}
-        const total = counts.total || 0
-        const leftist = counts.leftist || 0
-        const rightist = counts.rightist || 0
-        const common = counts.common || 0
-        
-        addDebugLog(`[SUCCESS] Received ${total} perspectives from Module 3`)
-        addDebugLog(`[DATA] Leftist: ${leftist}`)
-        addDebugLog(`[DATA] Rightist: ${rightist}`)
-        addDebugLog(`[DATA] Common: ${common}`)
-      } else {
-        addDebugLog('[SKIP] Step 1/3: Perspective files already exist in Module 4')
-        addDebugLog('[INFO] Using existing data instead of fetching from Module 3')
+      const sendDataResponse = await fetch('/module3/api/send_to_module4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      })
+      
+      if (!sendDataResponse.ok) {
+        const errorText = await sendDataResponse.text()
+        console.error('[Module4] Module 3 failed to send data:', sendDataResponse.status, errorText)
+        throw new Error(`Module 3 failed to send data to Module 4: ${sendDataResponse.status}. Make sure Module 3 has completed processing.`)
       }
       
-      // Step 2: Enrich perspectives (if enriched files don't exist)
-      if (hasEnrichedFiles) {
-        addDebugLog('[SKIP] Step 2/3: Enriched files already exist, skipping enrichment')
-        addDebugLog('[INFO] Using existing enriched data for debate')
-      } else {
+      const sendDataResult = await sendDataResponse.json()
+      console.log('[Module4] Module 3 sent data to Module 4:', sendDataResult)
+      
+      // Module 3 wraps the response in module4_response
+      const counts = sendDataResult.module4_response?.counts || sendDataResult.counts || {}
+      const total = counts.total || 0
+      const leftist = counts.leftist || 0
+      const rightist = counts.rightist || 0
+      const common = counts.common || 0
+      
+      addDebugLog(`[SUCCESS] Received ${total} perspectives from Module 3`)
+      addDebugLog(`[DATA] Leftist: ${leftist}`)
+      addDebugLog(`[DATA] Rightist: ${rightist}`)
+      addDebugLog(`[DATA] Common: ${common}`)
+      
+      // Step 2: Enrich perspectives with web evidence
+      {
         setProcessingStep("Step 2/3: Enriching with web evidence (Google Search + AI verification)... This may take up to 15 minutes.")
         console.log('[Module4] Step 2/3: Enriching perspectives with web evidence...')
         addDebugLog('[STEP 2/3] Starting web enrichment process...')
         addDebugLog('[INFO] This may take up to 15 minutes')
         addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
         
-        // Start enrichment in background (fire and forget)
-        let enrichmentStarted = false
         try {
           const enrichUrl = "/module4/api/enrich-perspectives"
-          addDebugLog('[INFO] Starting enrichment (this will run in background)...')
+          addDebugLog('[INFO] Calling enrichment endpoint...')
           
-          // Start enrichment without waiting for response
-          fetch(enrichUrl, {
+          const controller = new AbortController()
+          const enrichResponse = await fetch(enrichUrl, {
             method: "POST",
             headers: { 'Content-Type': 'application/json' },
-            cache: 'no-store'
-          }).catch(err => {
-            console.error('[Module4] Enrichment start error:', err)
-            addDebugLog(`[ERROR] Failed to start enrichment: ${err.message}`)
+            cache: 'no-store',
+            signal: controller.signal,
+            keepalive: true
           })
           
-          enrichmentStarted = true
-          addDebugLog('[INFO] Enrichment started in background')
-          
-          // Poll for completion (check every 10 seconds for up to 20 minutes)
-          const maxWaitTime = 20 * 60 * 1000 // 20 minutes
-          const pollInterval = 10000 // 10 seconds
-          const startTime = Date.now()
-          
-          let enrichmentComplete = false
-          let pollCount = 0
-          
-          while (!enrichmentComplete && (Date.now() - startTime) < maxWaitTime) {
-            pollCount++
-            await new Promise(resolve => setTimeout(resolve, pollInterval))
+          if (enrichResponse.ok) {
+            const enrichData = await enrichResponse.json()
             
-            try {
-              // Check if enriched files exist
-              const statusResponse = await fetch('/module4/api/status', { cache: 'no-store' })
-              const statusData = await statusResponse.json()
+            if (enrichData.status === "completed") {
+              latestEnrichment = enrichData
+              setEnrichmentResult(enrichData)
+              const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
+              addDebugLog(`[SUCCESS] Enrichment completed with ${totalLinks} verified web sources`)
+              setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
               
-              // Check for relevant_*.json files
-              const hasEnrichedFiles = statusData.enriched_files_exist === true
-              
-              if (hasEnrichedFiles) {
-                enrichmentComplete = true
-                addDebugLog('[SUCCESS] Enrichment completed!')
-                
-                // Try to get enrichment results
-                try {
-                  const enrichResultResponse = await fetch('/module4/api/enrichment-result', { cache: 'no-store' })
-                  if (enrichResultResponse.ok) {
-                    const enrichData = await enrichResultResponse.json()
-                    latestEnrichment = enrichData
-                    setEnrichmentResult(enrichData)
-                    const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
-                    addDebugLog(`[SUCCESS] Found ${totalLinks} verified web sources`)
-                    if (enrichData.summary) {
-                      for (const [filename, data] of Object.entries(enrichData.summary)) {
-                        addDebugLog(`[DATA] ${filename}: ${(data as any).items_with_links}/${(data as any).total_items} enriched`)
-                      }
-                    }
-                    setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
+              // Fetch enrichment items for display immediately
+              addDebugLog('[INFO] Fetching enrichment items for display...')
+              try {
+                const itemsResponse = await fetch('/module4/api/enrichment-items', { cache: 'no-store' })
+                if (itemsResponse.ok) {
+                  const itemsData = await itemsResponse.json()
+                  if (itemsData.status === "completed" && itemsData.items.length > 0) {
+                    setEnrichmentItems(itemsData.items)
+                    setShowEnrichmentItems(true)
+                    addDebugLog(`[SUCCESS] Loaded ${itemsData.total_items} enrichment items for display`)
+                    await new Promise(resolve => setTimeout(resolve, 2000))
                   }
-                } catch (err) {
-                  console.error('[Module4] Failed to fetch enrichment results:', err)
                 }
-                
-                break
-              } else {
-                const elapsed = Math.floor((Date.now() - startTime) / 1000)
-                addDebugLog(`[INFO] Enrichment in progress... (${elapsed}s elapsed, poll ${pollCount})`)
-                setProcessingStep(`Step 2/3: Enriching... (${elapsed}s elapsed, this may take up to 15 minutes)`)
+              } catch (err) {
+                console.error('[Module4] Failed to fetch enrichment items:', err)
               }
-            } catch (err) {
-              console.error('[Module4] Status check error:', err)
+            } else {
+              addDebugLog('[WARNING] Enrichment did not complete, proceeding with base perspectives')
             }
+          } else {
+            addDebugLog('[WARNING] Enrichment endpoint failed, proceeding with base perspectives')
           }
           
-          if (!enrichmentComplete) {
-            addDebugLog('[WARNING] Enrichment timeout, proceeding with base perspectives')
-            setProcessingStep("Step 2/3: Web enrichment taking too long, using base perspectives...")
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1500))
+          await new Promise(resolve => setTimeout(resolve, 1000))
           
         } catch (err) {
           console.error('[Module4] Enrichment error:', err)
@@ -398,22 +366,35 @@ export function Module4Client() {
       
       const data = await debateResponse.json()
       console.log('[Module4] Debate result:', data)
+      addDebugLog(`[SUCCESS] Debate completed!`)
       
-      // Simulate live debate by showing messages one by one
-      const transcript = data.debate_transcript || []
-      addDebugLog(`[INFO] Playing back ${transcript.length} debate rounds...`)
-      
-      for (let i = 0; i < transcript.length; i++) {
-        setLiveDebateMessages(transcript.slice(0, i + 1))
-        addDebugLog(`[DEBATE] Round ${i + 1} of ${transcript.length}`)
-        await new Promise(resolve => setTimeout(resolve, 2000))
+      // Fetch debate messages for animated display
+      addDebugLog('[INFO] Fetching debate messages for display...')
+      try {
+        const messagesResponse = await fetch('/module4/api/debate-messages', { cache: 'no-store' })
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json()
+          if (messagesData.status === "completed") {
+            const allMessages = messagesData.messages
+            addDebugLog(`[INFO] Playing back ${allMessages.length} debate messages...`)
+            setShowDebateMessages(true)
+            
+            // Animate messages one by one
+            for (let i = 0; i < allMessages.length; i++) {
+              setLiveDebateMessages(allMessages.slice(0, i + 1))
+              addDebugLog(`[DEBATE] Message ${i + 1} of ${allMessages.length} - ${allMessages[i].agent}`)
+              await new Promise(resolve => setTimeout(resolve, 1500))
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Module4] Failed to fetch debate messages:', err)
       }
       
-      addDebugLog(`[SUCCESS] Debate completed! ${transcript.length} rounds of debate`)
       addDebugLog(`[RESULT] Final trust score: ${data.trust_score || 'N/A'}`)
       addDebugLog('[INFO] Saving results and cache...')
       
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 1500))
       
       setDebateResult(data)
       saveToCache(data, latestEnrichment || undefined)
@@ -436,6 +417,10 @@ export function Module4Client() {
   const clearDebate = () => {
     setDebateResult(null)
     setEnrichmentResult(null)
+    setEnrichmentItems([])
+    setLiveDebateMessages([])
+    setShowEnrichmentItems(false)
+    setShowDebateMessages(false)
     setError(null)
     localStorage.removeItem(CACHE_KEY)
     clearModule4Data()
@@ -605,8 +590,100 @@ export function Module4Client() {
             </div>
           )}
 
+          {/* Enrichment Items Display */}
+          {showEnrichmentItems && enrichmentItems.length > 0 && (
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded-lg p-6 mb-6 animate-fade-in-up">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <h4 className="text-sm font-medium text-cyan-400 uppercase tracking-wider">Web Evidence Found</h4>
+                <span className="text-xs text-white/40 ml-auto">{enrichmentItems.length} sources</span>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                {enrichmentItems.map((item, idx) => (
+                  <div key={idx} className="border border-white/10 bg-black/30 rounded p-4 hover:border-cyan-500/30 transition-all animate-fade-in-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            item.category === 'leftist' ? 'bg-blue-500/20 text-blue-400' :
+                            item.category === 'rightist' ? 'bg-red-500/20 text-red-400' :
+                            'bg-purple-500/20 text-purple-400'
+                          }`}>
+                            {item.category}
+                          </span>
+                          <span className="text-xs text-white/40">{item.source_type}</span>
+                        </div>
+                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-sm text-cyan-400 hover:text-cyan-300 hover:underline line-clamp-1">
+                          {item.title}
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-1 px-2 py-1 rounded bg-white/5">
+                        <svg className="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                        </svg>
+                        <span className="text-xs text-white/70 font-medium">{(item.trust_score * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-white/50 leading-relaxed mb-2">{item.perspective_text}</p>
+                    {item.extracted_text && (
+                      <p className="text-xs text-white/40 italic leading-relaxed">&quot;{item.extracted_text}&quot;</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Debate Messages Display (Animated Messenger Style) */}
+          {showDebateMessages && liveDebateMessages.length > 0 && (
+            <div className="border border-purple-500/30 bg-purple-500/5 rounded-lg p-6 mb-6 animate-fade-in-up">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+                <h4 className="text-sm font-medium text-purple-400 uppercase tracking-wider">AI Debate in Progress</h4>
+                <span className="text-xs text-white/40 ml-auto">{liveDebateMessages.length} messages</span>
+              </div>
+              <div ref={debateViewRef} className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+                {liveDebateMessages.map((msg, idx) => {
+                  const isLeftist = msg.agent_type === 'leftist'
+                  const isRightist = msg.agent_type === 'rightist'
+                  const isJudge = msg.agent_type === 'judge'
+                  
+                  return (
+                    <div key={idx} className={`flex ${isJudge ? 'justify-center' : isRightist ? 'justify-end' : 'justify-start'} animate-fade-in-up`} style={{ animationDelay: `${idx * 0.1}s` }}>
+                      <div className={`max-w-[80%] rounded-lg p-4 ${
+                        isLeftist ? 'bg-blue-500/20 border border-blue-500/30' :
+                        isRightist ? 'bg-red-500/20 border border-red-500/30' :
+                        isJudge ? 'bg-yellow-500/20 border border-yellow-500/30 text-center' :
+                        'bg-white/10 border border-white/20'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-xs font-bold uppercase tracking-wider ${
+                            isLeftist ? 'text-blue-400' :
+                            isRightist ? 'text-red-400' :
+                            isJudge ? 'text-yellow-400' :
+                            'text-white/60'
+                          }`}>
+                            {msg.agent}
+                          </span>
+                          {msg.round && msg.round > 0 && (
+                            <span className="text-xs text-white/40">Round {msg.round}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Results placeholder */}
-          {!debateResult && !loading && !error && (
+          {!debateResult && !loading && !error && !showEnrichmentItems && !showDebateMessages && (
             <div className="border border-white/10 rounded p-12 text-center">
               <svg className="w-16 h-16 mx-auto mb-4 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8z"></path>
@@ -616,18 +693,32 @@ export function Module4Client() {
             </div>
           )}
 
-          {/* Results */}
+          {/* Final Summary */}
           {debateResult && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in-up">
               <div className="border border-green-500/30 bg-green-500/5 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span className="text-xs font-medium text-green-400 uppercase tracking-wider">Completed</span>
+                  <span className="text-xs font-medium text-green-400 uppercase tracking-wider">Analysis Completed</span>
                 </div>
                 <p className="text-white/70 text-sm">{debateResult.message || 'Debate analysis completed successfully'}</p>
               </div>
+              
+              {debateResult.trust_score !== undefined && (
+                <div className="border border-blue-500/30 bg-blue-500/5 rounded-lg p-5">
+                  <h4 className="text-xs font-medium text-blue-400 mb-3 uppercase tracking-wider">Trust Score</h4>
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold text-blue-400">{debateResult.trust_score}%</div>
+                    <div className="flex-1">
+                      <div className="w-full bg-white/10 rounded-full h-3">
+                        <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${debateResult.trust_score}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {debateResult.judgment && (
                 <div className="border border-purple-500/30 bg-purple-500/5 rounded-lg p-5">

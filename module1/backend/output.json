@@ -1,21 +1,19 @@
 {
   "input_type": "text",
-  "risk_level": "suspicious",
-  "confidence": 0.9,
-  "threats": [
-    "misinformation_fake_news"
-  ],
-  "recommendation": "This content reports a significant space launch event as if it happened on November 2, 2025, which is a future date. It also contains factual inaccuracies about the satellite mission, strongly indicating it is misinformation or fake news.",
+  "risk_level": "safe",
+  "confidence": 1.0,
+  "threats": [],
+  "recommendation": "This content appears to be a legitimate news article from a reputable source (BBC) discussing animal welfare at a farm park, with no indicators of malicious intent.",
   "ai_powered": true,
   "analysis_details": {
     "red_flags": [
-      "The most critical red flag is the publication date and event date explicitly stated as 'November 02, 2025', which is in the future. News reports describe past or present events, not future ones as if they have already occurred. Furthermore, the content refers to the satellite as 'GSAT-7R (CMS-03)'. While GSAT-7R might be a future satellite, CMS-03 was actually launched by ISRO in June 2022 (as GSAT-24), making its re-launch in 2025 inaccurate. The combination of a future date for a past event (CMS-03) and a potential future satellite (GSAT-7R) strongly points to fabricated information. While the embedded `t.co` URLs could potentially lead to malicious sites, the primary and undeniable threat based on the text content itself is misinformation. There are no overt calls for financial transactions, personal information, or any other typical scam or phishing tactics present in the provided text."
+      "The content is structured as a news report, citing credible individuals and organizations (BBC, Rabbit Welfare Association and Fund, Bucklebury Farm, Rae Walters, Oliver Shute). It discusses a positive development in animal welfare, without any elements commonly associated with financial scams, phishing attempts, social engineering tactics, misinformation, gambling, or malicious software distribution. No suspicious links, urgent calls to action, or requests for personal information are present. The mention of Pippa Middleton is a celebrity connection that adds to the newsworthiness, not a scam indicator."
     ],
-    "ai_explanation": "This content reports a significant space launch event as if it happened on November 2, 2025, which is a future date. It also contains factual inaccuracies about the satellite mission, strongly indicating it is misinformation or fake news.",
-    "ai_reasoning": "The most critical red flag is the publication date and event date explicitly stated as 'November 02, 2025', which is in the future. News reports describe past or present events, not future ones as if they have already occurred. Furthermore, the content refers to the satellite as 'GSAT-7R (CMS-03)'. While GSAT-7R might be a future satellite, CMS-03 was actually launched by ISRO in June 2022 (as GSAT-24), making its re-launch in 2025 inaccurate. The combination of a future date for a past event (CMS-03) and a potential future satellite (GSAT-7R) strongly points to fabricated information. While the embedded `t.co` URLs could potentially lead to malicious sites, the primary and undeniable threat based on the text content itself is misinformation. There are no overt calls for financial transactions, personal information, or any other typical scam or phishing tactics present in the provided text.",
-    "text_length": 3717
+    "ai_explanation": "This content appears to be a legitimate news article from a reputable source (BBC) discussing animal welfare at a farm park, with no indicators of malicious intent.",
+    "ai_reasoning": "The content is structured as a news report, citing credible individuals and organizations (BBC, Rabbit Welfare Association and Fund, Bucklebury Farm, Rae Walters, Oliver Shute). It discusses a positive development in animal welfare, without any elements commonly associated with financial scams, phishing attempts, social engineering tactics, misinformation, gambling, or malicious software distribution. No suspicious links, urgent calls to action, or requests for personal information are present. The mention of Pippa Middleton is a celebrity connection that adds to the newsworthiness, not a scam indicator.",
+    "text_length": 2117
   },
   "skip_to_final": false,
   "skip_reason": null,
-  "timestamp": "2025-11-03T11:36:08.141715"
+  "timestamp": "2025-11-03T17:20:52.085674"
 }

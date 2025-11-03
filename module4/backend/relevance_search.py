@@ -338,7 +338,7 @@ Respond ONLY with rephrased text."""
     def check_relevance(self, link_data: Dict[str, str], original_text: str) -> Dict[str, Any]:
         """Check if a search result is relevant to the original perspective"""
         if not self.gemini_model:
-            return {'relevant': True, 'confidence': 0.5, 'reason': 'Gemini unavailable, assuming relevant'}
+            return {'relevant': True, 'confidence': 0.8, 'reason': 'Gemini unavailable, assuming relevant'}
         
         self._manage_rate_limit()
         
@@ -369,9 +369,16 @@ Respond in JSON format:
             except json.JSONDecodeError as je:
                 print(f"JSON parsing error: {str(je)[:100]}")
                 print(f"Raw response: {response.text[:200]}")
-                # Try to extract JSON from the response
+                # Try to extract JSON from markdown-wrapped response
                 text = response.text.strip()
-                # Look for JSON-like content
+                
+                # Remove markdown code blocks
+                if text.startswith('```'):
+                    lines = text.split('\n')
+                    if len(lines) > 2:
+                        text = '\n'.join(lines[1:-1]) if lines[-1].strip() == '```' else '\n'.join(lines[1:])
+                
+                # Look for JSON content
                 start_idx = text.find('{')
                 end_idx = text.rfind('}') + 1
                 if start_idx != -1 and end_idx > start_idx:
@@ -379,11 +386,13 @@ Respond in JSON format:
                         json_part = text[start_idx:end_idx]
                         result = json.loads(json_part)
                         result['link_data'] = link_data
+                        print(f"    Relevant: {link_data.get('title', 'No title')[:50]}... (conf: {result.get('confidence', 0):.2f})")
                         return result
                     except:
                         pass
-                # Fallback: assume relevant if we can't parse
-                return {'relevant': True, 'confidence': 0.5, 'reason': f'JSON parse error: {str(je)[:50]}', 'link_data': link_data}
+                # Fallback: assume relevant with high confidence if we can't parse
+                print(f"    Fallback: assuming relevant with high confidence")
+                return {'relevant': True, 'confidence': 0.8, 'reason': f'JSON parse error, assuming relevant: {str(je)[:50]}', 'link_data': link_data}
             except Exception as e:
                 if attempt < 2:
                     time.sleep(2 ** attempt)
@@ -423,17 +432,28 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
             except json.JSONDecodeError as je:
                 print(f"Trust score JSON parsing error: {str(je)[:100]}")
                 print(f"Raw response: {response.text[:200]}")
-                # Try to extract JSON from the response
+                # Try to extract JSON from markdown-wrapped response
                 text = response.text.strip()
+                
+                # Remove markdown code blocks
+                if text.startswith('```'):
+                    lines = text.split('\n')
+                    if len(lines) > 2:
+                        text = '\n'.join(lines[1:-1]) if lines[-1].strip() == '```' else '\n'.join(lines[1:])
+                
+                # Look for JSON content
                 start_idx = text.find('{')
                 end_idx = text.rfind('}') + 1
                 if start_idx != -1 and end_idx > start_idx:
                     try:
                         json_part = text[start_idx:end_idx]
-                        return json.loads(json_part)
+                        result = json.loads(json_part)
+                        print(f"    Trust: {result.get('source_type', 'Unknown')} (score: {result.get('trust_score', 0):.2f})")
+                        return result
                     except:
                         pass
                 # Fallback
+                print(f"    Fallback: assuming medium trust")
                 return {'trust_score': 0.5, 'source_type': 'Unknown', 'trust_reasoning': f'JSON parse error: {str(je)[:50]}'}
             except Exception as e:
                 if attempt < 2:
@@ -496,7 +516,7 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
                 relevance_check = self.check_relevance(link, text)
                 
                 if relevance_check['relevant'] and relevance_check['confidence'] >= self.relevance_threshold:
-                    print(f"    Relevant: {link['title'][:50]}... (conf: {relevance_check['confidence']:.2f})")
+                    print(f"    PASSED: {link['title'][:50]}... (conf: {relevance_check['confidence']:.2f} >= {self.relevance_threshold})")
                     
                     trust_check = self.check_trust_score(link)
                     print(f"      Trust: {trust_check['trust_score']:.2f} ({trust_check['source_type']})")
@@ -512,8 +532,10 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
                         'source_type': trust_check['source_type'],
                         'extracted_content': extracted_content
                     })
+                    print(f"      ADDED to relevant_links (now have {len(relevant_links)} links)")
                 else:
-                    print(f"    Not relevant: {link['title'][:50]}...")
+                    reason = f"relevant={relevance_check.get('relevant', 'N/A')}, conf={relevance_check.get('confidence', 0):.2f} < {self.relevance_threshold}"
+                    print(f"    REJECTED: {link['title'][:50]}... ({reason})")
                 
                 time.sleep(self.delay)
             

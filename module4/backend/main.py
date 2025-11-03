@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import uvicorn
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -27,7 +28,7 @@ except Exception as e:
 
 # Setup logging
 try:
-    from utils.logger import setup_logger
+    from utils.logger import setup_logger  # type: ignore
     logger = setup_logger(__name__)
 except ImportError:
     import logging
@@ -196,12 +197,13 @@ async def enrich_perspectives():
     Enrich perspective data with web-scraped content.
     Converts leftist.json, rightist.json, common.json into relevant_*.json files
     with relevant links, trust scores, and extracted web content.
+    
+    This is a synchronous blocking operation that can take up to 15 minutes.
     """
     try:
         base_dir = Path(__file__).parent
         data_dir = base_dir / "data"
         
-        # Check if required files exist
         required_files = ["leftist.json", "rightist.json", "common.json"]
         missing_files = [f for f in required_files if not (data_dir / f).exists()]
         
@@ -214,19 +216,16 @@ async def enrich_perspectives():
         if not RelevanceSearchSystem:
             raise HTTPException(
                 status_code=503,
-                detail="Relevance search system not available. Please ensure all required modules are installed (google-api-python-client, selenium)."
+                detail="Relevance search system not available. Please ensure all required modules are installed."
             )
         
         logger.info("Starting perspective enrichment with web scraping...")
         
-        # Initialize relevance search system
         system = RelevanceSearchSystem(data_dir=str(data_dir))
         
         try:
-            # Process all files and enrich with web content
             results = system.process_all_files()
             
-            # Count total enriched perspectives
             total_enriched = sum(
                 sum(len(item['relevant_links']) for item in file_data['items'])
                 for file_data in results.values()
@@ -237,9 +236,7 @@ async def enrich_perspectives():
             return {
                 "status": "completed",
                 "message": "Perspectives enriched successfully with web content",
-                "files_created": [
-                    f"relevant_{f}" for f in required_files
-                ],
+                "files_created": [f"relevant_{f}" for f in required_files],
                 "total_relevant_links": total_enriched,
                 "summary": {
                     filename: {
@@ -266,6 +263,8 @@ async def start_debate(use_enriched: bool = True):
     Args:
         use_enriched: If True, uses relevant_*.json files with web-scraped content.
                      If False or files not found, falls back to simple perspective files.
+    
+    This is a synchronous blocking operation.
     """
     global latest_debate_result
     
@@ -273,7 +272,6 @@ async def start_debate(use_enriched: bool = True):
         base_dir = Path(__file__).parent
         data_dir = base_dir / "data"
         
-        # Determine which files to use
         if use_enriched:
             required_files = ["relevant_leftist.json", "relevant_rightist.json", "relevant_common.json"]
             missing_enriched = [f for f in required_files if not (data_dir / f).exists()]
@@ -289,7 +287,7 @@ async def start_debate(use_enriched: bool = True):
         if missing_files:
             raise HTTPException(
                 status_code=404,
-                detail=f"Required files not found: {', '.join(missing_files)}. Please upload perspective data first using /upload-perspectives endpoint."
+                detail=f"Required files not found: {', '.join(missing_files)}. Please upload perspective data first."
             )
         
         if not DebateOrchestrator:
@@ -301,27 +299,22 @@ async def start_debate(use_enriched: bool = True):
         using_enriched = all((data_dir / f).exists() for f in ["relevant_leftist.json", "relevant_rightist.json", "relevant_common.json"])
         logger.info(f"Starting debate with {'enriched' if using_enriched else 'simple'} perspective data...")
         
-        # Initialize debate orchestrator with data directory
         orchestrator = DebateOrchestrator()
         
-        # Load perspective data
         perspectives = {}
         for filename in required_files:
             file_path = data_dir / filename
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # Handle enriched format (has 'items' key) vs simple format (direct array)
                 if isinstance(data, dict) and 'items' in data:
                     perspectives_list = data['items']
                 else:
                     perspectives_list = data
                 
-                # Extract category name
                 category = filename.replace('relevant_', '').replace('.json', '')
                 perspectives[category] = perspectives_list
         
-        # Conduct debate
         result = orchestrator.conduct_debate(
             leftist_perspectives=perspectives.get('leftist', []),
             rightist_perspectives=perspectives.get('rightist', []),
@@ -330,10 +323,8 @@ async def start_debate(use_enriched: bool = True):
             min_rounds=1
         )
         
-        # Store result in memory
         latest_debate_result = result
         
-        # Save to file
         result_file = base_dir / "debate_result.json"
         with open(result_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
@@ -353,8 +344,9 @@ async def start_debate(use_enriched: bool = True):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Debate failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Debate failed: {str(e)}")
+        debate_running = False
+        logger.error(f"Failed to start debate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to start debate: {str(e)}")
 
 @app.get("/api/debate/result")
 async def get_debate_result():
@@ -389,6 +381,8 @@ async def get_debate_result():
 @app.post("/api/clear")
 async def clear_all_data():
     """Clear all perspective and debate data - for new session"""
+    global latest_debate_result
+    
     try:
         base_dir = Path(__file__).parent
         data_dir = base_dir / "data"
@@ -410,13 +404,11 @@ async def clear_all_data():
                 file_path.unlink()
                 removed_files.append(filename)
         
-        # Also clear debate result
         debate_result_file = base_dir / "debate_result.json"
         if debate_result_file.exists():
             debate_result_file.unlink()
             removed_files.append("debate_result.json")
         
-        global latest_debate_result
         latest_debate_result = None
         
         logger.info(f"Cleared {len(removed_files)} files for new session")
@@ -457,6 +449,38 @@ async def get_status():
         "enriched_files_exist": all(enriched_files_exist.values()),
         "enriched_files": enriched_files_exist,
         "ready_for_debate": all([files_exist["leftist"], files_exist["rightist"], files_exist["common"]])
+    }
+
+@app.get("/api/enrichment-status")
+async def get_enrichment_status():
+    """Get enrichment status - deprecated, kept for compatibility"""
+    base_dir = Path(__file__).parent
+    data_dir = base_dir / "data"
+    enriched_files_exist = all([
+        (data_dir / "relevant_leftist.json").exists(),
+        (data_dir / "relevant_rightist.json").exists(),
+        (data_dir / "relevant_common.json").exists()
+    ])
+    
+    return {
+        "running": False,
+        "status": {
+            "status": "completed" if enriched_files_exist else "idle",
+            "message": "Enrichment completed" if enriched_files_exist else "No enrichment"
+        }
+    }
+
+@app.get("/api/debate-status")
+async def get_debate_status():
+    """Get debate status - deprecated, kept for compatibility"""
+    global latest_debate_result
+    
+    return {
+        "running": False,
+        "status": {
+            "status": "completed" if latest_debate_result else "idle",
+            "message": "Debate completed" if latest_debate_result else "No debate"
+        }
     }
 
 @app.get("/api/enrichment-result")
@@ -504,6 +528,148 @@ async def get_enrichment_result():
     except Exception as e:
         logger.error(f"Failed to read enrichment results: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to read enrichment results: {str(e)}")
+
+@app.get("/api/enrichment-items")
+async def get_enrichment_items():
+    """Get enriched items for progressive display with URLs, trust scores, and source types"""
+    base_dir = Path(__file__).parent
+    data_dir = base_dir / "data"
+    
+    enriched_files = ["relevant_leftist.json", "relevant_rightist.json", "relevant_common.json"]
+    missing = [f for f in enriched_files if not (data_dir / f).exists()]
+    
+    if missing:
+        return {
+            "status": "pending",
+            "items": [],
+            "message": "Enrichment not completed yet"
+        }
+    
+    try:
+        all_items = []
+        
+        for filename in enriched_files:
+            file_path = data_dir / filename
+            category = filename.replace('relevant_', '').replace('.json', '')
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+                if isinstance(data, dict) and 'items' in data:
+                    items = data['items']
+                    
+                    for item in items:
+                        relevant_links = item.get('relevant_links', [])
+                        
+                        for link in relevant_links:
+                            all_items.append({
+                                "category": category,
+                                "perspective_text": item.get('text', '')[:200] + '...' if len(item.get('text', '')) > 200 else item.get('text', ''),
+                                "url": link.get('url', ''),
+                                "title": link.get('title', 'No title'),
+                                "trust_score": link.get('trust_score', 0.0),
+                                "source_type": link.get('source_type', 'Unknown'),
+                                "extracted_text": link.get('extracted_text', '')[:150] + '...' if len(link.get('extracted_text', '')) > 150 else link.get('extracted_text', '')
+                            })
+        
+        return {
+            "status": "completed",
+            "items": all_items,
+            "total_items": len(all_items)
+        }
+    except Exception as e:
+        logger.error(f"Failed to read enrichment items: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read enrichment items: {str(e)}")
+
+@app.get("/api/debate-messages")
+async def get_debate_messages():
+    """Get debate messages for progressive animated display"""
+    global latest_debate_result
+    
+    if not latest_debate_result:
+        # Try to load from file
+        base_dir = Path(__file__).parent
+        result_file = base_dir / "debate_result.json"
+        
+        if not result_file.exists():
+            return {
+                "status": "pending",
+                "messages": [],
+                "message": "Debate not started yet"
+            }
+        
+        try:
+            with open(result_file, "r", encoding="utf-8") as f:
+                latest_debate_result = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load debate result: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to load debate result: {str(e)}")
+    
+    # Extract debate transcript
+    transcript = latest_debate_result.get('debate_transcript', [])
+    
+    messages = []
+    for entry in transcript:
+        agent = entry.get('agent', 'Unknown')
+        message_text = entry.get('message') or entry.get('argument', '')
+        round_num = entry.get('round', 0)
+        
+        # Determine agent type for styling
+        agent_type = 'system'
+        if 'leftist' in agent.lower() or 'left' in agent.lower():
+            agent_type = 'leftist'
+        elif 'rightist' in agent.lower() or 'right' in agent.lower():
+            agent_type = 'rightist'
+        elif 'judge' in agent.lower() or 'moderator' in agent.lower():
+            agent_type = 'judge'
+        
+        messages.append({
+            "agent": agent,
+            "agent_type": agent_type,
+            "message": message_text,
+            "round": round_num
+        })
+    
+    return {
+        "status": "completed",
+        "messages": messages,
+        "total_messages": len(messages)
+    }
+
+@app.get("/api/debate-summary")
+async def get_debate_summary():
+    """Get final debate summary for display"""
+    global latest_debate_result
+    
+    if not latest_debate_result:
+        # Try to load from file
+        base_dir = Path(__file__).parent
+        result_file = base_dir / "debate_result.json"
+        
+        if not result_file.exists():
+            return {
+                "status": "pending",
+                "summary": None,
+                "message": "Debate not completed yet"
+            }
+        
+        try:
+            with open(result_file, "r", encoding="utf-8") as f:
+                latest_debate_result = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load debate result: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to load debate result: {str(e)}")
+    
+    return {
+        "status": "completed",
+        "summary": {
+            "trust_score": latest_debate_result.get("trust_score", 50),
+            "judgment": latest_debate_result.get("judgment", ""),
+            "topic": latest_debate_result.get("topic", ""),
+            "total_rounds": len(latest_debate_result.get("debate_transcript", [])),
+            "final_verdict": latest_debate_result.get("final_verdict", {})
+        }
+    }
 
 if __name__ == "__main__":
     # Get port from config or environment

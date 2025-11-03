@@ -1,0 +1,65 @@
+{
+  "topic": "Bucklebury Farm, a Berkshire farm park co-owned by Pippa Middleton, sister of Catherine, the Princess of Wales, has reportedly become the first establishment in the country to cease allowing visitors ...",
+  "source_file": "leftist.json",
+  "processed_at": "2025-11-03T17:25:32.629107",
+  "total_items": 6,
+  "items": [
+    {
+      "text": "This is a blatant example of how wealth and privilege allow the elite to opt out of public services and spaces that ordinary people rely on.",
+      "bias_x": 0.0,
+      "significance_y": 0.8,
+      "combined_score": 0.0,
+      "color": "red",
+      "relevant_links": [
+        {
+          "title": "Pippa Middleton's Surprising New Change at Her $1.9 Million Farm ...\nwww.marieclaire.com › Celebrity",
+          "link": "https://www.marieclaire.com/celebrity/royals/pippa-middleton-big-change-bucklebury-farm/",
+          "snippet": "",
+          "trust_score": 0.6,
+          "source_type": "News Organization",
+          "extracted_content": "CELEBRITY FASHION BEAUTY CULTURE NICE TALK STYLE AT LARGE POLITICS MORE RSS TRENDING Luxury Beauty Gifts Aritzia x Nike Jacques Marie Mage Funnel-Neck Jackets CELEBRITY ROYALS Pippa Middleton’s Surprising New Change at Her $1.9 Million Farm Has Everyone Talking STAY IN THE KNOW It’s Time—Wear Fall 2025’s Biggest Trends Before Anyone Else Enter your email to see the list. LET'S GO I'm All Set By submitting your information you agree to the Terms & Conditions and Privacy Policy and are aged 16 or over."
+        }
+      ]
+    },
+    {
+      "text": "The closure could be due to a variety of factors, and we shouldn't immediately jump to conclusions about the owners' motives.",
+      "bias_x": 0.1905,
+      "significance_y": 0.8,
+      "combined_score": 0.1524,
+      "color": "orange",
+      "relevant_links": []
+    },
+    {
+      "text": "The financial sustainability of such a venture is a major concern, and closures are sometimes a necessary business decision.",
+      "bias_x": 0.3333,
+      "significance_y": 0.7,
+      "combined_score": 0.2333,
+      "color": "yellow",
+      "relevant_links": []
+    },
+    {
+      "text": "Pippa Middleton is using her royal connections to create an exclusive, members-only environment, further stratifying society.",
+      "bias_x": 0.0476,
+      "significance_y": 0.6,
+      "combined_score": 0.0286,
+      "color": "red",
+      "relevant_links": []
+    },
+    {
+      "text": "It's possible this is a temporary measure due to staffing shortages or a need for infrastructure upgrades, rather than a permanent policy.",
+      "bias_x": 0.2381,
+      "significance_y": 0.6,
+      "combined_score": 0.1429,
+      "color": "orange",
+      "relevant_links": []
+    },
+    {
+      "text": "There could be unforeseen logistical or operational challenges that have led to this difficult choice.",
+      "bias_x": 0.381,
+      "significance_y": 0.6,
+      "combined_score": 0.2286,
+      "color": "yellow",
+      "relevant_links": []
+    }
+  ]
+}

@@ -1,20 +1,38 @@
 [
   {
-    "color": "green",
-    "bias_x": 0.5714,
-    "significance_y": 0.9,
-    "text": "This launch strengthens India's position as a major player in the global space arena, particularly in the domain of defense technology."
-  },
-  {
     "color": "indigo",
-    "bias_x": 0.8214,
+    "bias_x": 0.8571,
     "significance_y": 0.9,
-    "text": "This launch is a testament to the visionary leadership of our government and its dedication to a strong and secure India."
+    "text": "This is a bold and decisive leadership action, demonstrating strong business acumen."
   },
   {
     "color": "violet",
     "bias_x": 1.0,
-    "significance_y": 0.9,
-    "text": "India's space program is a source of immense national pride and a key driver of our country's ascent to global superpower status."
+    "significance_y": 0.88,
+    "text": "The Middleton family is a credit to the country, and this decisive action is another example of their strong leadership."
+  },
+  {
+    "color": "violet",
+    "bias_x": 0.9048,
+    "significance_y": 0.84,
+    "text": "The Middleton family is demonstrating a clear understanding of market dynamics by cutting their losses in a failing venture."
+  },
+  {
+    "color": "blue",
+    "bias_x": 0.619,
+    "significance_y": 0.8,
+    "text": "This is a prudent business decision to address operational challenges and ensure long-term viability."
+  },
+  {
+    "color": "indigo",
+    "bias_x": 0.7619,
+    "significance_y": 0.8,
+    "text": "This is a responsible move to ensure the farm's long-term viability and protect its brand reputation from potential negative publicity."
+  },
+  {
+    "color": "violet",
+    "bias_x": 0.9524,
+    "significance_y": 0.71,
+    "text": "This is a sound financial decision that will likely lead to a more profitable and sustainable business model in the long run."
   }
 ]

@@ -1,24 +1,22 @@
 {
   "detailed_analysis": {
     "classification": {
-      "person": 2.0,
+      "person": 20.0,
       "organization": 65.0,
-      "social": 8.0,
+      "social": 10.0,
       "critical": 0.0,
-      "stem": 25.0
+      "stem": 5.0
     },
-    "classification_reasoning": "The primary verification method for this news would involve official communications and records from ISRO and the Indian Navy, making 'Organization' the dominant category. Many facts, such as satellite weight, rocket type, and orbital mechanics, are objective data points verifiable through 'STEM' principles and historical records. The article explicitly mentions and links to ISRO's official content on social media platforms (YouTube, X/Twitter), necessitating 'Social' media verification to confirm the authenticity of these posts. Quotes from the ISRO chairman require 'Person' verification of his specific statements, though this is a minor part of the overall event. 'Critical' verification is not relevant as this is a planned space launch, not an emergency.",
+    "classification_reasoning": "The core information revolves around the actions and policies of a specific farm (Bucklebury Farm) and the statements of an animal charity (Rabbit Welfare Association and Fund), making organizational verification paramount. Verification of direct quotes from individuals (Rae Walters, Oliver Shute) and the co-ownership detail (Pippa Middleton) falls under 'Person'. Public observation of the farm's new practices could be verified through 'Social' channels. General statements about animal behavior or established public facts like business ownership could be quickly verified via 'STEM'-like factual checks.",
     "classification_confidence": 95.0,
-    "significance_score": 52,
-    "significance_explanation": "Suspicious content with 90.0% confidence. High debate significance as interpretation varies.",
-    "comprehensive_summary": "On November 2, 2025, the Indian Space Research Organisation (ISRO) successfully launched the GSAT-7R, also known as CMS-03, which is the Indian Navy’s most advanced communication satellite. The launch took place at approximately 5:26 p.m. IST from the second launch pad at the Satish Dhawan Space Centre in Sriharikota, Andhra Pradesh, utilizing ISRO’s powerful LVM3 launch vehicle on its M5 mission. This indigenously designed and developed satellite is significant for weighing approximately 4,400 kg, making it India’s heaviest communication satellite to date launched from Indian soil. Following its successful liftoff, the satellite was inserted into a geosynchronous transfer orbit (GTO), from which it will use its onboard propulsion systems to raise and circularize its final operational orbit. Equipped with state-of-the-art indigenous components, the GSAT-7R is poised to provide robust and secure telecommunication coverage across the Indian Ocean Region for the Navy, featuring an advanced payload with transponders supporting voice, data, and video links over multiple communication bands, thus ensuring seamless connectivity between naval ships, submarines, aircraft, and Maritime Operations Centres. This mission marks a major milestone in strengthening the Navy’s space-based communications and maritime domain awareness, underscoring India’s growing self-reliance, or Aatmanirbhar Bharat, in space technology and its commitment to safeguarding national maritime interests by enabling armed forces to operate with enhanced situational awareness and secure, high-capacity communication links. Furthermore, the launch demonstrated the LVM3 rocket's proven capacity to routinely handle four-tonne-plus satellites to GTO from India, thereby reducing dependence on foreign launchers for heavy communication satellites, and directly feeding into ISRO’s preparations for Gaganyaan, its maiden human spaceflight programme, which plans to use an evolved LVM3 variant. ISRO Chairman V. Narayanan affirmed the success, highlighting the Indian space sector's ascent in providing valuable services to the user community in and around the Indian region.",
-    "requires_debate": true,
+    "significance_score": 45,
+    "significance_explanation": "Suspicious content with 100.0% confidence. High debate significance as interpretation varies.",
+    "comprehensive_summary": "Bucklebury Farm, a Berkshire farm park co-owned by Pippa Middleton, sister of Catherine, the Princess of Wales, has reportedly become the first establishment in the country to cease allowing visitors to pick up rabbits and guinea pigs. This significant policy change was implemented three days ago following a plea from the animal charity, Rabbit Welfare Association and Fund (RWAF). Rae Walters, the RWAF's chief executive, highly praised Bucklebury Farm for its \"really creative and inventive\" methods, which now include specific measures ensuring that animals are not picked up or placed on tables. Walters emphasized the importance of animal autonomy, stating, \"If they choose to come up and interact with you, great – that's their choice. If they choose not to interact, they have to be allowed to do that,\" and strongly advocated against \"forced interactions.\" She underscored that rabbits are \"intelligent, reactive, social animals\" that deserve to be celebrated for their natural characteristics, rather than being subjected to potentially frightening experiences like being put on a table for petting. Among the innovations highlighted by the charity is \"guinea pig fishing,\" an interactive method where vegetables and treats are lowered into the animals' pens for them to eat. Oliver Shute, Bucklebury Farm's managing director, affirmed that these changes are aimed at providing their rabbits with \"the life they truly deserve,\" ensuring they have \"space to run, dig and hide\" to feel safe and content. He concluded by articulating the farm's broader mission: to go beyond merely having visitors see animals, by actively demonstrating exemplary animal welfare and setting an important precedent for the proper care of often misunderstood rabbits.",
+    "requires_debate": false,
     "debate_priority": "medium"
   },
-  "module1_confidence": 0.9,
-  "module1_risk_level": "suspicious",
-  "module1_threats": [
-    "misinformation_fake_news"
-  ],
-  "timestamp": "2025-11-03T11:36:40.539390"
+  "module1_confidence": 1.0,
+  "module1_risk_level": "safe",
+  "module1_threats": [],
+  "timestamp": "2025-11-03T17:21:28.714242"
 }

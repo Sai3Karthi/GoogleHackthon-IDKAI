@@ -1,8 +1,14 @@
 [
   {
     "color": "green",
-    "bias_x": 0.4643,
+    "bias_x": 0.4762,
     "significance_y": 0.8,
-    "text": "This satellite will greatly improve the Navy's ability to communicate securely across vast ocean stretches, a critical requirement for a maritime nation."
+    "text": "Operational efficiency and cost-effectiveness might be the driving factors behind this strategic decision."
+  },
+  {
+    "color": "green",
+    "bias_x": 0.5238,
+    "significance_y": 0.6,
+    "text": "Perhaps the farm is shifting its focus towards educational programs or private events for a more targeted audience."
   }
 ]
