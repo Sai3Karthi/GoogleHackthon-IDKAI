@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
-import { clearSession, saveFinalAnalysis, setCurrentModule } from "@/lib/session-manager"
+import { saveFinalAnalysis, setCurrentModule, requireSessionId, clearAllData } from "@/lib/session-manager"
 
 interface Module1Output {
   input_type: string
@@ -97,34 +97,38 @@ export function Module5() {
   const [comprehensiveAnalysis, setComprehensiveAnalysis] = useState<ComprehensiveAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
 
-  useEffect(() => {
-    setCurrentModule(5)
-    loadComprehensiveData()
+  const appendSessionParam = useCallback((path: string, idOverride?: string) => {
+    const activeSession = idOverride ?? sessionIdRef.current
+    if (!activeSession) {
+      return path
+    }
+
+    const encoded = encodeURIComponent(activeSession)
+    return path.includes('?')
+      ? `${path}&session_id=${encoded}`
+      : `${path}?session_id=${encoded}`
   }, [])
 
-  const startNewSession = async () => {
-    if (confirm('Start a new session? This will clear all current data and return to Module 1.')) {
-      console.log('[Module5] Starting new session - clearing all data')
-      
-      const { clearAllData } = require('@/lib/session-manager')
-      await clearAllData()
-      
-      console.log('[Module5] Redirecting to Module 1')
-      router.push('/modules/1')
-    }
-  }
-
-  const loadComprehensiveData = async () => {
+  const loadComprehensiveData = useCallback(async (activeSessionId?: string) => {
     try {
+      const targetSession = activeSessionId ?? sessionIdRef.current
+      if (!targetSession) {
+        setError('No active pipeline session. Run Module 1 analysis first.')
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
+      setError(null)
       
-      // Fetch data from all modules
       const [module1Res, module2Res, module3Res, module4Res] = await Promise.allSettled([
-        fetch("/module1/api/output"),
-        fetch("/module2/api/output"),
-        fetch("/module3/api/output"),
-        fetch("/module4/api/debate/result")
+        fetch(appendSessionParam("/module1/api/output", targetSession), { cache: 'no-store' }),
+        fetch(appendSessionParam("/module2/api/output", targetSession), { cache: 'no-store' }),
+        fetch(appendSessionParam("/module3/api/output", targetSession), { cache: 'no-store' }),
+        fetch(appendSessionParam("/module4/api/debate/result", targetSession), { cache: 'no-store' })
       ])
       
       const module1Data = module1Res.status === 'fulfilled' && module1Res.value.ok 
@@ -146,7 +150,6 @@ export function Module5() {
       
       setOutput(module1Data)
       
-      // Generate comprehensive analysis
       const analysis = generateComprehensiveAnalysis(
         module1Data,
         module2Data,
@@ -168,17 +171,48 @@ export function Module5() {
     } finally {
       setLoading(false)
     }
+  }, [appendSessionParam])
+
+  useEffect(() => {
+    setCurrentModule(5)
+    try {
+      const activeSessionId = requireSessionId()
+      setSessionId(activeSessionId)
+    } catch (err) {
+      console.error('[Module5] No active session available', err)
+      setError('No active pipeline session. Run Module 1 analysis first.')
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+    if (!sessionId) {
+      return
+    }
+
+    loadComprehensiveData(sessionId)
+  }, [sessionId, source, loadComprehensiveData])
+
+  const startNewSession = async () => {
+    if (confirm('Start a new session? This will clear all current data and return to Module 1.')) {
+      console.log('[Module5] Starting new session - clearing all data')
+      await clearAllData()
+      
+      console.log('[Module5] Redirecting to Module 1')
+      router.push('/modules/1')
+    }
   }
-  
+
   const generateComprehensiveAnalysis = (
     m1: Module1Output | null,
     m2: Module2Output | null,
     m3: Module3Output | null,
     m4: Module4Output | null
   ): ComprehensiveAnalysis => {
-    const keyLearnings: string[] = []
-    let summary = ""
-    let contentType = m1?.input_type || "unknown"
+  const keyLearnings: string[] = []
+  let summary = ""
+  const contentType = m1?.input_type || "unknown"
     
     // Module 1 Analysis
     if (m1) {

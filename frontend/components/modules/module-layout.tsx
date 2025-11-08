@@ -8,7 +8,7 @@ interface ModuleLayoutProps {
   moduleNumber: number
   title: string
   description: string
-  status?: "progress" | "ready"
+  status?: "progress" | "ready" | "error"
 }
 
 export function ModuleLayout({ 
@@ -53,7 +53,12 @@ export function ModuleLayout({
                     </h1>
                     {status === "progress" && (
                       <span className="px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-xs">
-                        Under Development
+                        In Progress
+                      </span>
+                    )}
+                    {status === "error" && (
+                      <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs">
+                        Action Required
                       </span>
                     )}
                   </div>

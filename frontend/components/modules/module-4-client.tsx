@@ -94,6 +94,9 @@ export function Module4Client() {
   const [showDebateMessages, setShowDebateMessages] = useState<boolean>(false)
   const debugTerminalRef = useRef<HTMLDivElement>(null)
   const debateViewRef = useRef<HTMLDivElement>(null)
+  const debateUpdateSourceRef = useRef<EventSource | null>(null)
+  const debateCompleteSourceRef = useRef<EventSource | null>(null)
+  const lastMessageIndexRef = useRef<number>(0)
 
   const appendQueryParams = (url: string, params: Record<string, string | number | boolean>) => {
     const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
@@ -113,6 +116,132 @@ export function Module4Client() {
   const addDebugLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
     setDebugLogs(prev => [...prev, `[${timestamp}] ${message}`])
+  }
+
+  const closeDebateStreams = () => {
+    if (debateUpdateSourceRef.current) {
+      debateUpdateSourceRef.current.close()
+      debateUpdateSourceRef.current = null
+    }
+    if (debateCompleteSourceRef.current) {
+      debateCompleteSourceRef.current.close()
+      debateCompleteSourceRef.current = null
+    }
+  }
+
+  const refreshDebateResult = async (session: string) => {
+    try {
+      const resultUrl = appendQueryParams('/module4/api/debate/result', { session_id: session })
+      const response = await fetch(resultUrl, { cache: 'no-store' })
+      if (!response.ok) {
+        console.warn('[Module4] Failed to refresh debate result:', response.status)
+        return null
+      }
+      const data = await response.json()
+      if (data.status === 'completed') {
+        setDebateResult(data)
+      }
+      return data
+    } catch (error) {
+      console.error('[Module4] Error refreshing debate result:', error)
+      return null
+    }
+  }
+
+  const setupDebateStreams = () => {
+    const activeSession = sessionIdRef.current
+    if (!activeSession) {
+      console.warn('[Module4] Skipping SSE setup - missing session id')
+      return
+    }
+
+    closeDebateStreams()
+    lastMessageIndexRef.current = 0
+
+    const updateSource = new EventSource('/api/debate-update')
+
+    updateSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'connected') {
+          return
+        }
+        if (data.session_id && data.session_id !== activeSession) {
+          return
+        }
+
+        const index = Number(data.message_index || 0)
+        if (index && index <= lastMessageIndexRef.current) {
+          return
+        }
+        lastMessageIndexRef.current = index || lastMessageIndexRef.current + 1
+
+        setShowDebateMessages(true)
+        setLiveDebateMessages(prev => {
+          const payload: DebateMessage = {
+            agent: data.agent ?? 'Agent',
+            agent_type: data.agent_type ?? undefined,
+            message: data.argument ?? data.message ?? '',
+            round: data.round ?? prev.length + 1
+          }
+          return [...prev, payload]
+        })
+      } catch (error) {
+        console.error('[Module4] SSE update parsing error:', error)
+      }
+    }
+
+    updateSource.onerror = (error) => {
+      console.error('[Module4] SSE update error:', error)
+    }
+
+    debateUpdateSourceRef.current = updateSource
+
+    const completeSource = new EventSource('/api/debate-complete')
+
+    completeSource.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'connected') {
+          return
+        }
+        if (data.session_id && data.session_id !== activeSession) {
+          return
+        }
+
+        closeDebateStreams()
+
+        if (data.type === 'failed') {
+          setProcessingStep('')
+          setLoading(false)
+          setError(data.error ?? 'Debate failed to complete')
+          return
+        }
+
+        setProcessingStep('Finalizing debate results...')
+        const refreshed = await refreshDebateResult(activeSession)
+        if (refreshed && refreshed.status === 'completed') {
+          addDebugLog(`[RESULT] Final trust score: ${refreshed.trust_score ?? 'N/A'}`)
+          saveToCache(refreshed, enrichmentResult ?? undefined)
+          saveModule4Data({
+            debateResult: refreshed,
+            enrichmentResult: enrichmentResult
+          })
+        }
+        setProcessingStep('')
+        setLoading(false)
+      } catch (error) {
+        console.error('[Module4] SSE completion parsing error:', error)
+        setProcessingStep('')
+        setLoading(false)
+      }
+    }
+
+    completeSource.onerror = (error) => {
+      console.error('[Module4] SSE completion error:', error)
+    }
+
+    debateCompleteSourceRef.current = completeSource
   }
 
   const loadFromCache = async () => {
@@ -276,6 +405,12 @@ export function Module4Client() {
   }, [])
 
   useEffect(() => {
+    return () => {
+      closeDebateStreams()
+    }
+  }, [])
+
+  useEffect(() => {
     sessionIdRef.current = sessionId
     if (!sessionId) {
       return
@@ -332,6 +467,9 @@ export function Module4Client() {
     setProcessingStep("")
     setDebugLogs([])
     setShowDebugTerminal(true)
+    lastMessageIndexRef.current = 0
+    closeDebateStreams()
+    setupDebateStreams()
     let latestEnrichment: EnrichmentResult | null = enrichmentResult
     
     try {
@@ -368,10 +506,34 @@ export function Module4Client() {
       
       // Module 3 wraps the response in module4_response
       const counts = sendDataResult.module4_response?.counts || sendDataResult.counts || {}
-      const total = counts.total || 0
-      const leftist = counts.leftist || 0
-      const rightist = counts.rightist || 0
-      const common = counts.common || 0
+      let total = counts.total || 0
+      let leftist = counts.leftist || 0
+      let rightist = counts.rightist || 0
+      let common = counts.common || 0
+
+      // If Module 3 didn't include counts in the response, fetch output directly for accurate stats
+      if (total === 0 && leftist === 0 && rightist === 0 && common === 0) {
+        try {
+          const outputUrl = appendQueryParams('/module3/api/output', { session_id: activeSession })
+          const outputResponse = await fetch(outputUrl, { cache: 'no-store' })
+          if (outputResponse.ok) {
+            const outputData = await outputResponse.json()
+            const finalOutput = outputData?.final_output || {}
+
+            const derivedLeftist = Array.isArray(finalOutput.leftist) ? finalOutput.leftist.length : 0
+            const derivedRightist = Array.isArray(finalOutput.rightist) ? finalOutput.rightist.length : 0
+            const derivedCommon = Array.isArray(finalOutput.common) ? finalOutput.common.length : 0
+            const perspectiveCount = Array.isArray(outputData?.perspectives) ? outputData.perspectives.length : 0
+
+            leftist = derivedLeftist
+            rightist = derivedRightist
+            common = derivedCommon
+            total = perspectiveCount || derivedLeftist + derivedRightist + derivedCommon
+          }
+        } catch (fetchErr) {
+          console.warn('[Module4] Unable to derive Module 3 perspective counts:', fetchErr)
+        }
+      }
       
       addDebugLog(`[SUCCESS] Received ${total} perspectives from Module 3`)
       addDebugLog(`[DATA] Leftist: ${leftist}`)
@@ -540,42 +702,31 @@ export function Module4Client() {
       setDebateResult(data)
       addDebugLog(`[RESULT] Final trust score: ${data.trust_score || 'N/A'}`)
       
-      // Fetch debate messages for animated display
-      addDebugLog('[INFO] Fetching debate messages for display...')
-      try {
-        const messagesUrl = appendQueryParams('/module4/api/debate-messages', {
-          session_id: activeSession,
-        })
-        const messagesResponse = await fetch(messagesUrl, { cache: 'no-store' })
-        if (messagesResponse.ok) {
-          const messagesData = await messagesResponse.json()
-          if (messagesData.status === "completed" && Array.isArray(messagesData.messages)) {
-            const allMessages = messagesData.messages
-            addDebugLog(`[INFO] Animating ${allMessages.length} debate messages...`)
-            
-            // Animate messages one by one (container already visible from step 3 start)
-            // Use requestAnimationFrame for smoother updates
-            for (let i = 0; i < allMessages.length; i++) {
-              // Safety check: ensure component is still mounted
-              try {
-                setLiveDebateMessages(allMessages.slice(0, i + 1))
-                await new Promise(resolve => setTimeout(resolve, 500))
-              } catch (e) {
-                console.error('[Module4] Animation interrupted:', e)
-                // Set all messages at once if animation fails
-                setLiveDebateMessages(allMessages)
-                break
-              }
+      if (lastMessageIndexRef.current === 0) {
+        // Fallback when live stream failed
+        addDebugLog('[INFO] Fetching debate messages for display...')
+        try {
+          const messagesUrl = appendQueryParams('/module4/api/debate-messages', {
+            session_id: activeSession,
+          })
+          const messagesResponse = await fetch(messagesUrl, { cache: 'no-store' })
+          if (messagesResponse.ok) {
+            const messagesData = await messagesResponse.json()
+            if (messagesData.status === "completed" && Array.isArray(messagesData.messages)) {
+              const allMessages = messagesData.messages
+              addDebugLog(`[INFO] Rendering ${allMessages.length} debate messages (fallback)`)
+              setShowDebateMessages(true)
+              setLiveDebateMessages(allMessages)
+            } else {
+              addDebugLog('[WARN] No messages found in response (fallback)')
             }
           } else {
-            addDebugLog('[WARN] No messages found in response')
+            addDebugLog('[WARN] Failed to fetch debate messages (fallback)')
           }
-        } else {
-          addDebugLog('[WARN] Failed to fetch debate messages')
+        } catch (err) {
+          console.error('[Module4] Failed to fetch debate messages:', err)
+          addDebugLog('[ERROR] Could not load debate messages for display')
         }
-      } catch (err) {
-        console.error('[Module4] Failed to fetch debate messages:', err)
-        addDebugLog('[ERROR] Could not load debate messages for display')
       }
       
       // Save to cache and session
@@ -588,11 +739,13 @@ export function Module4Client() {
       
       setProcessingStep("")
       addDebugLog('[COMPLETE] All steps completed successfully!')
+      closeDebateStreams()
     } catch (err) {
       console.error('[Module4] Debate error:', err)
       addDebugLog(`[ERROR] ${err instanceof Error ? err.message : 'Unknown error'}`)
       setError(err instanceof Error ? err.message : "Failed to connect to Module 4 backend")
       setProcessingStep("")
+      closeDebateStreams()
       
       // Ensure UI is still visible even on error
       if (debateResult) {

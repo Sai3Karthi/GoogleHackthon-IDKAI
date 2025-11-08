@@ -127,7 +127,11 @@ async def proxy_request(module_name: str, path: str, request: Request):
 
     protocol = "https" if mod_config.get("use_https", False) else "http"
     port_suffix = "" if mod_config.get("use_https", False) else f":{mod_config['port']}"
-    target_url = f"{protocol}://{mod_config['host']}{port_suffix}/{path}"
+    query_string = request.url.query
+    path_segment = path or ""
+    target_url = f"{protocol}://{mod_config['host']}{port_suffix}/{path_segment}"
+    if query_string:
+        target_url = f"{target_url}?{query_string}"
 
     body = await request.body()
     headers = dict(request.headers)

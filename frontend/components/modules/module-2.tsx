@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
-import { saveModule2Data, getModule2Data, setCurrentModule } from "@/lib/session-manager"
+import { saveModule2Data, getModule2Data, setCurrentModule, requireSessionId } from "@/lib/session-manager"
 
 interface ClassificationResult {
   person: number
@@ -40,32 +40,57 @@ export function Module2() {
   const [error, setError] = useState<string | null>(null)
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
   const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // ALWAYS check backend first to stay synced
-    console.log('[Module2] Checking backend for latest data...')
-    loadOutputData()
-    
+    let isMounted = true
     setCurrentModule(2)
-    
+    try {
+      const activeSessionId = requireSessionId()
+      if (isMounted) {
+        setSessionId(activeSessionId)
+        sessionIdRef.current = activeSessionId
+        console.log('[Module2] Active session detected:', activeSessionId)
+        loadOutputData(activeSessionId)
+      }
+    } catch (err) {
+      console.error('[Module2] No active session available', err)
+      if (isMounted) {
+        setError('No active pipeline session. Run Module 1 analysis first.')
+        setLoading(false)
+      }
+    }
+
     return () => {
       if (redirectTimerRef.current) {
         clearInterval(redirectTimerRef.current)
       }
+      isMounted = false
     }
   }, [])
 
-  const loadOutputData = async () => {
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  const loadOutputData = async (forcedSessionId?: string) => {
     try {
       setLoading(true)
       setError(null) // Clear any previous errors
+
+      const activeSessionId = forcedSessionId ?? sessionIdRef.current
+      if (!activeSessionId) {
+        throw new Error('No active pipeline session. Run Module 1 analysis first.')
+      }
+      const encodedSessionId = encodeURIComponent(activeSessionId)
       
       // Check if we have session data (user navigated back)
       const sessionData = getModule2Data()
       const hasSessionData = sessionData?.output !== undefined && sessionData?.output !== null
       
-      const response = await fetch("/module2/api/output")
+      const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`)
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -76,7 +101,7 @@ export function Module2() {
           setError("Please wait... Processing your request")
           // Retry after 3 seconds
           setTimeout(() => {
-            loadOutputData()
+            loadOutputData(activeSessionId)
           }, 3000)
           return
         }

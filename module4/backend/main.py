@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+if sys.platform.startswith("win"):
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:  # pragma: no cover - defensive guard
+        pass
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -129,6 +135,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+if sys.platform.startswith("win"):
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception as loop_error:  # pragma: no cover - defensive guard
+        logger.debug("Event loop policy setup skipped: %s", loop_error)
 
 
 debate_cache: Dict[str, Dict[str, Any]] = {}
@@ -646,6 +659,7 @@ async def enrich_perspectives(
             perspective_payload=categories,
             topic=topic,
             context_text=context_text,
+            force_refresh=force,
         )
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Failed to initialize relevance search: %s", exc)
@@ -936,36 +950,42 @@ async def debate_status(
     return {"running": False, "status": status_info, "session_id": resolved}
 
 
-if __name__ == "__main__":  # pragma: no cover - manual execution
-    import uvicorn
-
-    logger.info("Starting Module 4 server on %s:%s", HOST, PORT)
-    uvicorn.run(
-        "module4.backend.main:app",
-        host=HOST,
-        port=PORT,
-        log_level="info",
-    )
-
-if __name__ == "__main__":
-    # Get port from config or environment
+def _resolve_bind() -> tuple[str, int]:
     port_env = os.getenv("PORT")
     if port_env:
-        port = int(port_env)
-        host = "0.0.0.0"
-    elif config:
-        port = config.get_module4_port()
-        host = config.get_module4_host()
-    else:
-        port = int(os.getenv("MODULE4_PORT", 8004))
-        host = os.getenv("HOST", "0.0.0.0")
+        return "0.0.0.0", int(port_env)
+    if config:
+        return config.get_module4_host(), config.get_module4_port()
+    return os.getenv("HOST", "0.0.0.0"), int(os.getenv("MODULE4_PORT", 8004))
 
-    logger.info(f"Starting Module 4 server on {host}:{port}")
+
+def _run_server() -> None:  # pragma: no cover - manual execution helper
+    import uvicorn
+
+    host, port = _resolve_bind()
+    logger.info("Starting Module 4 server on %s:%s", host, port)
     logger.info("Waiting for perspective data from Module 3...")
 
-    uvicorn.run(
+    config_obj = uvicorn.Config(
         app,
         host=host,
         port=port,
-        log_level="info"
+        log_level="info",
     )
+    server = uvicorn.Server(config_obj)
+
+    if sys.platform.startswith("win"):
+        # Force selector loop via Runner to avoid Proactor incompatibility in psycopg.
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        except Exception as loop_error:  # pragma: no cover - defensive guard
+            logger.debug("Event loop policy setup skipped during launch: %s", loop_error)
+
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+            runner.run(server.serve())
+    else:
+        asyncio.run(server.serve())
+
+
+if __name__ == "__main__":  # pragma: no cover - manual execution
+    _run_server()

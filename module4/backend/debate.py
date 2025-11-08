@@ -1,9 +1,11 @@
 import json
-import google.generativeai as genai
-from typing import Dict, List
-from pathlib import Path
-from dotenv import load_dotenv
 import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
+
+import google.generativeai as genai
+from dotenv import load_dotenv
 
 # Load environment variables from root .env file
 root_dir = Path(__file__).parent.parent.parent
@@ -236,6 +238,10 @@ Your judgment:"""
             }
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 class DebateOrchestrator:
     def __init__(self, config_path: str = "config.json"):
         """Initialize orchestrator - agents created per debate"""
@@ -256,7 +262,8 @@ class DebateOrchestrator:
         rightist_perspectives: List[Dict],
         common_perspectives: List[Dict],
         max_rounds: int = 3,
-        min_rounds: int = 1
+        min_rounds: int = 1,
+        progress_callback: Optional[Callable[[Dict], None]] = None,
     ) -> Dict:
         """
         Conduct debate with perspective data
@@ -267,7 +274,17 @@ class DebateOrchestrator:
         if leftist_perspectives and len(leftist_perspectives) > 0:
             topic = leftist_perspectives[0].get('text', topic)[:100]
         
+        def emit(event: str, **payload) -> None:
+            if not progress_callback:
+                return
+            update = {"event": event, "timestamp": _now_iso(), **payload}
+            try:
+                progress_callback(update)
+            except Exception as exc:  # pragma: no cover - defensive
+                print(f"[DebateOrchestrator] Progress callback failed: {exc}")
+
         print(f"Starting debate: {topic}")
+        emit("start", topic=topic)
         
         # Create agents
         leftist = DebateAgent(
@@ -296,16 +313,38 @@ class DebateOrchestrator:
         debate_transcript = []
         
         # Round 1: Initial arguments
+        emit("round_start", round=1)
         print("Round 1: Initial arguments")
         
         leftist_arg = leftist.make_argument(topic)
         debate_transcript.append({"agent": "Leftist Agent", "argument": leftist_arg, "round": 1})
+        emit(
+            "agent_argument",
+            agent="Leftist Agent",
+            agent_type="leftist",
+            argument=leftist_arg,
+            round=1,
+        )
         
         rightist_arg = rightist.make_argument(topic)
         debate_transcript.append({"agent": "Rightist Agent", "argument": rightist_arg, "round": 1})
+        emit(
+            "agent_argument",
+            agent="Rightist Agent",
+            agent_type="rightist",
+            argument=rightist_arg,
+            round=1,
+        )
         
         common_arg = common.make_argument(topic)
         debate_transcript.append({"agent": "Common Agent", "argument": common_arg, "round": 1})
+        emit(
+            "agent_argument",
+            agent="Common Agent",
+            agent_type="common",
+            argument=common_arg,
+            round=1,
+        )
         
         # Additional rounds
         current_round = 2
@@ -328,6 +367,7 @@ class DebateOrchestrator:
                 except:
                     pass
             
+            emit("round_start", round=current_round)
             print(f"Round {current_round}: Responses")
             
             debate_history = "\n\n".join([
@@ -338,12 +378,33 @@ class DebateOrchestrator:
             # Agents respond
             leftist_response = leftist.respond_to_opponent(topic, rightist_arg, debate_history)
             debate_transcript.append({"agent": "Leftist Agent", "argument": leftist_response, "round": current_round})
+            emit(
+                "agent_argument",
+                agent="Leftist Agent",
+                agent_type="leftist",
+                argument=leftist_response,
+                round=current_round,
+            )
             
             rightist_response = rightist.respond_to_opponent(topic, leftist_arg, debate_history)
             debate_transcript.append({"agent": "Rightist Agent", "argument": rightist_response, "round": current_round})
+            emit(
+                "agent_argument",
+                agent="Rightist Agent",
+                agent_type="rightist",
+                argument=rightist_response,
+                round=current_round,
+            )
             
             common_response = common.respond_to_opponent(topic, leftist_arg, debate_history)
             debate_transcript.append({"agent": "Common Agent", "argument": common_response, "round": current_round})
+            emit(
+                "agent_argument",
+                agent="Common Agent",
+                agent_type="common",
+                argument=common_response,
+                round=current_round,
+            )
             
             current_round += 1
         
@@ -352,6 +413,11 @@ class DebateOrchestrator:
         transcript_text = "\n\n".join([f"[{t['agent']}]: {t['argument']}" for t in debate_transcript])
         
         judgment = judge.evaluate_debate(topic, transcript_text)
+        emit(
+            "finalizing",
+            trust_score=judgment.get("trust_score"),
+            total_rounds=current_round - 1,
+        )
         
         result = {
             "topic": topic,
@@ -362,5 +428,6 @@ class DebateOrchestrator:
         }
         
         print(f"Debate completed: Trust score = {judgment['trust_score']}%")
+        emit("complete", trust_score=judgment.get("trust_score"), total_rounds=current_round - 1)
         
         return result

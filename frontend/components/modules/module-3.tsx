@@ -75,10 +75,44 @@ export function Module3() {
   const outputGraphRef = useRef<HTMLDivElement>(null)
   const [showClusteringDetails, setShowClusteringDetails] = useState(false)
   const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const eventListenersAttachedRef = useRef(false)
+  const finalRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
   const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const parseStatusSnapshot = (snapshot: any) => {
+    const stage = typeof snapshot?.module3_stage === 'string' ? snapshot.module3_stage : null
+    const sessionRunning = Boolean(snapshot?.session_running)
+    const module3OutputAvailable = Boolean(snapshot?.module3_output_available)
+    const finalOutputReady = Boolean(snapshot?.final_output_ready) || stage === 'completed'
+    const perspectivesReady = stage === 'perspectives_ready'
+    return {
+      stage,
+      sessionRunning,
+      module3OutputAvailable,
+      finalOutputReady,
+      perspectivesReady,
+    }
+  }
+
+  const promoteStep = (targetStep: number) => {
+    setCurrentStep((prev) => (prev < targetStep ? targetStep : prev))
+  }
+
+  const revealFinalOutput = () => {
+    promoteStep(2)
+    setShowGraph(true)
+    setShowOutputGraph(true)
+    if (finalRevealTimeoutRef.current) {
+      clearTimeout(finalRevealTimeoutRef.current)
+    }
+    finalRevealTimeoutRef.current = setTimeout(() => {
+      promoteStep(3)
+      finalRevealTimeoutRef.current = null
+    }, 3000)
+  }
 
   const steps = [
     { name: "Input", description: "Receive topic and significance score from Module 2" },
@@ -347,26 +381,70 @@ export function Module3() {
         return
       }
       
-      const status = await statusResponse.json()
-      console.log('[Module3] Backend status:', status)
-      
+      const snapshot = await statusResponse.json()
+      console.log('[Module3] Backend status snapshot:', snapshot)
+
       setBackendRunning(true)
-      
-      // Resume based on backend state
-      if (status.status === 'completed' && status.pipeline_complete) {
-        console.log('[Module3] Pipeline already completed, loading results...')
-        await loadCompletedResults()
-      } else if (status.status === 'processing') {
-        console.log('[Module3] Pipeline in progress, resuming UI...')
-        setCurrentStep(1)
+
+      const {
+        finalOutputReady,
+        module3OutputAvailable,
+        sessionRunning,
+        perspectivesReady,
+      } = parseStatusSnapshot(snapshot)
+
+      if (finalOutputReady || (module3OutputAvailable && !sessionRunning)) {
+        console.log('[Module3] Stored results detected, syncing UI...')
+        const results = await loadCompletedResults()
+        if (results.hasFinalOutput) {
+          revealFinalOutput()
+        } else if (results.hasPerspectives) {
+          promoteStep(2)
+        }
+        setIsGenerating(false)
+        setLoading(false)
+        return
+      }
+
+      if (sessionRunning || perspectivesReady) {
+        console.log('[Module3] Pipeline active, attaching listeners...')
+        if (module3OutputAvailable || perspectivesReady) {
+          const results = await loadCompletedResults()
+          if (results.hasPerspectives) {
+            promoteStep(2)
+          } else {
+            promoteStep(1)
+          }
+        } else {
+          promoteStep(1)
+        }
         setIsGenerating(true)
         setLoading(true)
-        setupEventListeners()
+        if (!eventListenersAttachedRef.current) {
+          setupEventListeners()
+        }
         startStatusPolling()
-      } else {
-        console.log('[Module3] Backend idle, ready for generation')
-        setCurrentStep(0)
+        return
       }
+
+      if (module3OutputAvailable) {
+        const results = await loadCompletedResults()
+        if (results.hasFinalOutput) {
+          revealFinalOutput()
+        } else if (results.hasPerspectives) {
+          promoteStep(2)
+        } else {
+          promoteStep(0)
+        }
+        setIsGenerating(false)
+        setLoading(false)
+        return
+      }
+
+      console.log('[Module3] Backend idle, awaiting trigger')
+      setIsGenerating(false)
+      setLoading(false)
+      setCurrentStep(0)
     } catch (error) {
       console.error('[Module3] Error checking backend status:', error)
       setBackendRunning(false)
@@ -374,51 +452,89 @@ export function Module3() {
     }
   }
 
-  const loadCompletedResults = async () => {
+  const loadCompletedResults = async (): Promise<{ hasPerspectives: boolean; hasFinalOutput: boolean }> => {
+    let hasPerspectives = false
+    let hasFinalOutput = false
+
     try {
-      // Fetch output.json
-  const outputResponse = await fetch(appendSessionParam("/module3/api/output"))
-      if (outputResponse.ok) {
-        const outputData = await outputResponse.json()
-        if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
-          setPerspectives(outputData.perspectives)
-          setShowGraph(true)
-          
-          // Fetch final clustered output
+      const outputResponse = await fetch(appendSessionParam("/module3/api/output"))
+      if (!outputResponse.ok) {
+        return { hasPerspectives, hasFinalOutput }
+      }
+
+      const outputData = await outputResponse.json()
+      const perspectivesData = Array.isArray(outputData.perspectives) ? outputData.perspectives : []
+
+      if (perspectivesData.length > 0) {
+        hasPerspectives = true
+        setPerspectives(perspectivesData)
+        setShowGraph(true)
+      }
+
+      let finalOutputPayload: { leftist: Perspective[]; common: Perspective[]; rightist: Perspective[] } | null = null
+      const inlineFinalOutput = outputData.final_output
+
+      if (inlineFinalOutput && typeof inlineFinalOutput === 'object') {
+        finalOutputPayload = {
+          leftist: Array.isArray(inlineFinalOutput.leftist) ? inlineFinalOutput.leftist : [],
+          common: Array.isArray(inlineFinalOutput.common) ? inlineFinalOutput.common : [],
+          rightist: Array.isArray(inlineFinalOutput.rightist) ? inlineFinalOutput.rightist : []
+        }
+      }
+
+      if (!finalOutputPayload || (!finalOutputPayload.leftist.length && !finalOutputPayload.common.length && !finalOutputPayload.rightist.length)) {
+        try {
           const [leftistRes, commonRes, rightistRes] = await Promise.all([
             fetch(appendSessionParam("/module3/module3/output/leftist")),
             fetch(appendSessionParam("/module3/module3/output/common")),
             fetch(appendSessionParam("/module3/module3/output/rightist"))
           ])
-          
+
           if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
-            const leftist = await leftistRes.json()
-            const common = await commonRes.json()
-            const rightist = await rightistRes.json()
-            
-            const clusteredOutput = { leftist, common, rightist }
-            setFinalOutput(clusteredOutput)
-            
-            // Save to cache and session
-            if (currentInputHash) {
-              savePerspectivesToCache(
-                currentInputHash,
-                outputData.perspectives,
-                clusteredOutput
-              )
-              saveModule3Data({
-                perspectives: outputData.perspectives,
-                finalOutput: clusteredOutput,
-                inputHash: currentInputHash
-              })
+            const [leftist, common, rightist] = await Promise.all([
+              leftistRes.json(),
+              commonRes.json(),
+              rightistRes.json()
+            ])
+
+            finalOutputPayload = {
+              leftist: Array.isArray(leftist) ? leftist : [],
+              common: Array.isArray(common) ? common : [],
+              rightist: Array.isArray(rightist) ? rightist : []
             }
-            
           }
+        } catch (error) {
+          console.error('[Module3] Error fetching final output from backend:', error)
         }
+      }
+
+      if (finalOutputPayload) {
+        hasFinalOutput = Boolean(
+          finalOutputPayload.leftist.length ||
+          finalOutputPayload.common.length ||
+          finalOutputPayload.rightist.length
+        )
+
+        setFinalOutput(finalOutputPayload)
+        setShowOutputGraph(hasFinalOutput)
+
+        if (currentInputHash && perspectivesData.length && hasFinalOutput) {
+          savePerspectivesToCache(currentInputHash, perspectivesData, finalOutputPayload)
+          saveModule3Data({
+            perspectives: perspectivesData,
+            finalOutput: finalOutputPayload,
+            inputHash: currentInputHash
+          })
+        }
+      } else {
+        setFinalOutput(null)
+        setShowOutputGraph(false)
       }
     } catch (error) {
       console.error('[Module3] Error loading completed results:', error)
     }
+
+    return { hasPerspectives, hasFinalOutput }
   }
 
   const startStatusPolling = () => {
@@ -430,19 +546,36 @@ export function Module3() {
     // Poll every 2 seconds
     statusPollingRef.current = setInterval(async () => {
       try {
-  const response = await fetch(appendSessionParam("/module3/api/status"))
-        if (response.ok) {
-          const status = await response.json()
-          
-          if (status.status === 'completed' && status.pipeline_complete) {
-            console.log('[Module3] Pipeline completed via polling')
-            if (statusPollingRef.current) {
-              clearInterval(statusPollingRef.current)
-              statusPollingRef.current = null
-            }
-            setIsGenerating(false)
-            setLoading(false)
-            await loadCompletedResults()
+        const response = await fetch(appendSessionParam("/module3/api/status"))
+        if (!response.ok) {
+          return
+        }
+
+        const snapshot = await response.json()
+        const {
+          finalOutputReady,
+          module3OutputAvailable,
+          perspectivesReady,
+        } = parseStatusSnapshot(snapshot)
+
+        if (module3OutputAvailable || perspectivesReady) {
+          const results = await loadCompletedResults()
+          if (results.hasPerspectives && !finalOutputReady) {
+            promoteStep(2)
+          }
+        }
+
+        if (finalOutputReady) {
+          console.log('[Module3] Pipeline completed via polling')
+          if (statusPollingRef.current) {
+            clearInterval(statusPollingRef.current)
+            statusPollingRef.current = null
+          }
+          setIsGenerating(false)
+          setLoading(false)
+          const results = await loadCompletedResults()
+          if (results.hasFinalOutput) {
+            revealFinalOutput()
           }
         }
       } catch (error) {
@@ -457,10 +590,29 @@ export function Module3() {
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       })
-      if (response.ok) {
-        setBackendRunning(true)
-        fetchInputData()
+      if (!response.ok) {
+        setBackendRunning(false)
+        return
       }
+
+      const snapshot = await response.json()
+      setBackendRunning(true)
+
+      const {
+        finalOutputReady,
+        module3OutputAvailable,
+      } = parseStatusSnapshot(snapshot)
+
+      if (module3OutputAvailable || finalOutputReady) {
+        const results = await loadCompletedResults()
+        if (results.hasFinalOutput) {
+          revealFinalOutput()
+        } else if (results.hasPerspectives) {
+          promoteStep(2)
+        }
+      }
+
+      fetchInputData()
     } catch (error) {
       setBackendRunning(false)
     }
@@ -575,7 +727,18 @@ export function Module3() {
       console.warn('[Module3] Event listeners skipped due to missing session id')
       return
     }
+    if (eventListenersAttachedRef.current) {
+      console.log('[Module3] Event listeners already active, skipping re-attachment')
+      return
+    }
         
+    eventListenersAttachedRef.current = true
+    const teardown = () => {
+      if (eventListenersAttachedRef.current) {
+        eventListenersAttachedRef.current = false
+      }
+    }
+
     // Listen for batch updates via Server-Sent Events
     const batchEventSource = new EventSource('/api/perspective-update')
     
@@ -602,6 +765,8 @@ export function Module3() {
     
     batchEventSource.onerror = (error) => {
       console.error('[SSE] Batch EventSource error:', error)
+      batchEventSource.close()
+      teardown()
     }
     
     // Listen for completion via Server-Sent Events
@@ -617,6 +782,7 @@ export function Module3() {
           // Close event sources
           batchEventSource.close()
           completeEventSource.close()
+          teardown()
           
           // Stop status polling
           if (statusPollingRef.current) {
@@ -689,6 +855,9 @@ export function Module3() {
     
     completeEventSource.onerror = (error) => {
       console.error('[SSE] Complete EventSource error:', error)
+      batchEventSource.close()
+      completeEventSource.close()
+      teardown()
     }
     
     // Timeout after 5 minutes
@@ -697,6 +866,7 @@ export function Module3() {
       completeEventSource.close()
       setLoading(false)
       setIsGenerating(false)
+      teardown()
           }, 300000)
   }
 
@@ -734,7 +904,7 @@ export function Module3() {
         moduleNumber={3}
         title="Perspective Generation"
         description="AI generates multiple perspectives from various viewpoints, then two agents debate them to analyze the overall standing of information"
-        status="idle"
+        status="error"
       >
         <div className="border border-yellow-500/30 bg-yellow-500/5 text-yellow-200 rounded p-6 text-sm">
           {sessionError}

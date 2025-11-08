@@ -7,6 +7,15 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import lru_cache
 from typing import AsyncIterator, Iterator
 
+import asyncio
+import sys
+
+try:  # Prefer asyncpg on platforms where it's available
+    import asyncpg  # type: ignore  # noqa: F401
+    _HAS_ASYNCPG = True
+except ImportError:  # pragma: no cover - optional dependency
+    _HAS_ASYNCPG = False
+
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -15,6 +24,15 @@ from sqlalchemy.pool import NullPool
 
 from config_loader import get_config
 from .models import Base
+
+
+if sys.platform.startswith("win"):
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:  # pragma: no cover - defensive guard
+        pass
+
+_PREFER_ASYNCPG = _HAS_ASYNCPG and sys.platform.startswith("win")
 
 
 def resolve_database_url() -> str:
@@ -34,16 +52,24 @@ def resolve_sync_database_url() -> str:
 
 
 def _ensure_async_driver(url: str) -> str:
+    if url.startswith("postgresql+asyncpg://"):
+        if not _HAS_ASYNCPG:
+            return url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        return url
     if url.startswith("postgresql+psycopg://"):
+        if _PREFER_ASYNCPG:
+            return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
         return url
     if url.startswith("postgresql+psycopg_async://"):
-        return url
-    if url.startswith("postgresql+asyncpg://"):
+        if _PREFER_ASYNCPG:
+            return url.replace("postgresql+psycopg_async://", "postgresql+asyncpg://", 1)
         return url
     if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+        driver = "asyncpg" if _PREFER_ASYNCPG else "psycopg"
+        return url.replace("postgresql://", f"postgresql+{driver}://", 1)
     if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg://", 1)
+        driver = "asyncpg" if _PREFER_ASYNCPG else "psycopg"
+        return url.replace("postgres://", f"postgresql+{driver}://", 1)
     if url.startswith("sqlite+aiosqlite://"):
         return url
     if url.startswith("sqlite:///"):
