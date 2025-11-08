@@ -1,4 +1,4 @@
-# 🚀 QUICK START: Deploy Frontend to Google Cloud
+# QUICK START: Deploy Frontend to Google Cloud
 
 ## Prerequisites (One-Time Setup)
 
@@ -23,11 +23,11 @@ gcloud services enable cloudbuild.googleapis.com
 
 ---
 
-## 🎯 DEPLOY NOW (One Command)
+## DEPLOY NOW (One Command)
 
 ### Option 1: Using PowerShell Script
 ```powershell
-./deploy-gcp.ps1
+./deploy-frontend.ps1
 ```
 
 ### Option 2: Manual Command
@@ -40,13 +40,13 @@ gcloud run deploy idkai-frontend --source . --region us-central1 --allow-unauthe
 
 ---
 
-## ✅ What You'll Get
+## What You'll Get
 
 After deployment completes:
-- ✅ Live URL: `https://idkai-frontend-RANDOM.run.app`
-- ✅ HTTPS enabled automatically
-- ✅ Auto-scaling (0 to 10 instances)
-- ✅ Free tier: 2 million requests/month
+- Live URL: `https://idkai-frontend-RANDOM.run.app`
+- HTTPS enabled automatically
+- Auto-scaling (0 to 10 instances)
+- Free tier: 2 million requests/month
 
 ---
 
@@ -61,25 +61,25 @@ gcloud run services update idkai-frontend \
 
 ---
 
-## 📋 Files Created for Google Cloud
+## Files Created for Google Cloud
 
 ### New Files:
-- ✅ `frontend/Dockerfile` - Docker build configuration
-- ✅ `frontend/.dockerignore` - Exclude unnecessary files
-- ✅ `frontend/app.yaml` - App Engine config (optional)
-- ✅ `GCP_DEPLOY.md` - Complete deployment guide
-- ✅ `deploy-gcp.ps1` - Quick deployment script
+- `frontend/Dockerfile` - Docker build configuration
+- `frontend/.dockerignore` - Exclude unnecessary files
+- `frontend/app.yaml` - App Engine config (optional)
+- `GCP_DEPLOY.md` - Complete deployment guide
+- `deploy-frontend.ps1` - Fast Cloud Run deployment script
 
 ### Updated Files:
-- ✅ `frontend/next.config.js` - Added standalone output
-- ✅ `frontend/package.json` - Removed Vercel script
+- `frontend/next.config.js` - Added standalone output
+- `frontend/package.json` - Removed Vercel script
 
 ### Removed Files:
-- ❌ All Vercel-related files deleted
+- All Vercel-related files deleted
 
 ---
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### "gcloud: command not found"
 Install Google Cloud CLI: https://cloud.google.com/sdk/docs/install
@@ -102,7 +102,7 @@ gcloud run services logs idkai-frontend --region us-central1 --follow
 
 ---
 
-## 💰 Cost
+## Cost
 
 **Free Tier Includes:**
 - 2 million requests/month
@@ -113,10 +113,10 @@ Most small projects stay within free tier!
 
 ---
 
-## 🎉 Ready?
+## Ready?
 
 ```bash
-./deploy-gcp.ps1
+./deploy-frontend.ps1
 ```
 
-Your frontend will be live in minutes! 🚀
+Your frontend will be live in minutes!

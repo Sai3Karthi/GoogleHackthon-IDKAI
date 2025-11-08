@@ -1,14 +1,20 @@
 [
     {
         "color": "green",
-        "bias_x": 0.4762,
-        "significance_y": 0.71,
-        "text": "The consistent publication of 'Cat News' provides a valuable historical record of scientific advancements in felid research."
+        "bias_x": 0.439,
+        "significance_y": 0.8,
+        "text": "The term 'giveaway' is often used loosely; it could simply be a promotional offer requiring a purchase or sign-up."
     },
     {
-        "color": "yellow",
-        "bias_x": 0.4286,
-        "significance_y": 0.59,
-        "text": "The 'diverse collection of scientific papers' likely contributes to the body of knowledge used by policymakers and conservation organizations."
+        "color": "green",
+        "bias_x": 0.5122,
+        "significance_y": 0.7,
+        "text": "The website's user interface and the clarity of its terms and conditions are key indicators of its legitimacy."
+    },
+    {
+        "color": "green",
+        "bias_x": 0.4634,
+        "significance_y": 0.6,
+        "text": "A quick search for reviews or news articles about 'example.com' might reveal if it has a history of scams."
     }
 ]

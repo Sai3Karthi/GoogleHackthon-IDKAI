@@ -19,7 +19,8 @@ import {
   setCurrentModule,
   getModule4Data,
   getFinalAnalysisData,
-  isPipelineCompleted
+  isPipelineCompleted,
+  requireSessionId
 } from "@/lib/session-manager"
 
 interface Perspective {
@@ -33,6 +34,9 @@ export function Module3() {
   const [inputData, setInputData] = useState<any>(null)
   const [perspectives, setPerspectives] = useState<Perspective[]>([])
   const router = useRouter()
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
   
   const [finalOutput, setFinalOutput] = useState<{
     leftist: Perspective[]
@@ -91,13 +95,32 @@ export function Module3() {
   }
 
   useEffect(() => {
-    // Set current module
     setCurrentModule(3)
-    
-    // Cleanup expired caches on mount
+    try {
+      const activeSessionId = requireSessionId()
+      setSessionId(activeSessionId)
+      sessionIdRef.current = activeSessionId
+    } catch (error) {
+      console.error('[Module3] No active session available', error)
+      setSessionError('No active pipeline session. Run Module 1 analysis first.')
+    }
+  }, [])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!sessionId) {
+      return
+    }
+
+    if (sessionError) {
+      setSessionError(null)
+    }
+
     cleanupExpiredCaches()
-    
-    // Try to restore from session first
+
     const sessionData = getModule3Data()
     if (sessionData && sessionData.perspectives.length > 0) {
       console.log('[Module3] CACHED DATA DETECTED - NOT CHANGING STEPS')
@@ -109,23 +132,21 @@ export function Module3() {
       fetchInputData().catch(console.error)
       return
     }
-    
-    // Load input data from backend via GET request
+
     const loadInputData = async () => {
+      const encodedSession = encodeURIComponent(sessionId)
       try {
-        const response = await fetch("/module3/api/input")
+        const response = await fetch(`/module3/api/input?session_id=${encodedSession}`)
         if (response.ok) {
           const input = await response.json()
           setInputData(input)
-          
-          // Generate hash for this input
+
           const hash = generateInputHash({
             topic: input.topic,
             text: input.text
           })
           setCurrentInputHash(hash)
-          
-          // Try to load from cache
+
           const cached = loadPerspectivesFromCache(hash)
           if (cached) {
             console.log('[Module3] Loading from cache:', cached.perspectives.length, 'perspectives')
@@ -135,45 +156,45 @@ export function Module3() {
             setFinalOutput(cached.finalOutput)
             console.log('[Module3] Cache loaded successfully')
             return
-          } else {
-            console.log('[Module3] No cache found, checking backend status...')
-            setBackendRunning(true)
-            checkBackendStatusAndResume()
           }
-        } else {
-          // Fallback to hardcoded input if backend not available
-          console.log("Backend not available, using fallback input")
-          setInputData(fallbackInput)
-          
-          const hash = generateInputHash({
-            topic: fallbackInput.topic,
-            text: fallbackInput.text
-          })
-          setCurrentInputHash(hash)
-          
-          const cached = loadPerspectivesFromCache(hash)
-          if (cached) {
-            console.log('[Module3] Loading from cache (fallback):', cached.perspectives.length, 'perspectives')
-            setPerspectives(cached.perspectives)
-            setFinalOutput(cached.finalOutput)
-            console.log('[Module3] Cache loaded successfully (fallback)')
-          } else {
-            console.log('[Module3] No cache found for hash (fallback):', hash)
-          }
-          
-          setBackendRunning(false)
+
+          console.log('[Module3] No cache found, checking backend status...')
+          setBackendRunning(true)
+          checkBackendStatusAndResume()
+          return
         }
-      } catch (error) {
-        console.error("Error loading input data:", error)
+
+        console.log('Backend not available, using fallback input')
         setInputData(fallbackInput)
-        setBackendRunning(false)
-        
+
         const hash = generateInputHash({
           topic: fallbackInput.topic,
           text: fallbackInput.text
         })
         setCurrentInputHash(hash)
-        
+
+        const cached = loadPerspectivesFromCache(hash)
+        if (cached) {
+          console.log('[Module3] Loading from cache (fallback):', cached.perspectives.length, 'perspectives')
+          setPerspectives(cached.perspectives)
+          setFinalOutput(cached.finalOutput)
+          console.log('[Module3] Cache loaded successfully (fallback)')
+        } else {
+          console.log('[Module3] No cache found for hash (fallback):', hash)
+        }
+
+        setBackendRunning(false)
+      } catch (error) {
+        console.error('Error loading input data:', error)
+        setInputData(fallbackInput)
+        setBackendRunning(false)
+
+        const hash = generateInputHash({
+          topic: fallbackInput.topic,
+          text: fallbackInput.text
+        })
+        setCurrentInputHash(hash)
+
         const cached = loadPerspectivesFromCache(hash)
         if (cached) {
           setPerspectives(cached.perspectives)
@@ -181,17 +202,16 @@ export function Module3() {
         }
       }
     }
-    
+
     loadInputData()
-    
-    // Cleanup polling on unmount
+
     return () => {
       if (statusPollingRef.current) {
         clearInterval(statusPollingRef.current)
         statusPollingRef.current = null
       }
     }
-  }, [])
+  }, [sessionId])
 
   // Handle ESC key for methodology modal
   useEffect(() => {
@@ -315,7 +335,7 @@ export function Module3() {
 
   const checkBackendStatusAndResume = async () => {
     try {
-      const statusResponse = await fetch("/module3/api/status", { 
+      const statusResponse = await fetch(appendSessionParam("/module3/api/status"), { 
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       })
@@ -357,7 +377,7 @@ export function Module3() {
   const loadCompletedResults = async () => {
     try {
       // Fetch output.json
-      const outputResponse = await fetch("/module3/api/output")
+  const outputResponse = await fetch(appendSessionParam("/module3/api/output"))
       if (outputResponse.ok) {
         const outputData = await outputResponse.json()
         if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
@@ -366,9 +386,9 @@ export function Module3() {
           
           // Fetch final clustered output
           const [leftistRes, commonRes, rightistRes] = await Promise.all([
-            fetch("/module3/module3/output/leftist"),
-            fetch("/module3/module3/output/common"),
-            fetch("/module3/module3/output/rightist")
+            fetch(appendSessionParam("/module3/module3/output/leftist")),
+            fetch(appendSessionParam("/module3/module3/output/common")),
+            fetch(appendSessionParam("/module3/module3/output/rightist"))
           ])
           
           if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
@@ -410,7 +430,7 @@ export function Module3() {
     // Poll every 2 seconds
     statusPollingRef.current = setInterval(async () => {
       try {
-        const response = await fetch("/module3/api/status")
+  const response = await fetch(appendSessionParam("/module3/api/status"))
         if (response.ok) {
           const status = await response.json()
           
@@ -433,7 +453,7 @@ export function Module3() {
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch("/module3/api/status", { 
+      const response = await fetch(appendSessionParam("/module3/api/status"), { 
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       })
@@ -478,8 +498,13 @@ export function Module3() {
 
 
   const fetchInputData = async () => {
+    const id = sessionIdRef.current
+    if (!id) {
+      console.warn('[Module3] fetchInputData called without session id')
+      return
+    }
     try {
-      const response = await fetch("/module3/api/input")
+      const response = await fetch(appendSessionParam("/module3/api/input"))
       if (response.ok) {
         const data = await response.json()
         setInputData(data)
@@ -507,6 +532,11 @@ export function Module3() {
     setPerspectives([])
 
     try {
+      const activeSessionId = sessionIdRef.current
+      if (!activeSessionId) {
+        throw new Error('No active session available for generation')
+      }
+
       // Setup event listeners BEFORE starting pipeline
       setupEventListeners()
       
@@ -516,6 +546,13 @@ export function Module3() {
       // Start the pipeline
       const response = await fetch("/module3/api/run_pipeline_stream", {
         method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          send_to_module4: false
+        })
       })
 
       if (!response.ok) {
@@ -534,6 +571,10 @@ export function Module3() {
   }
 
   const setupEventListeners = () => {
+    if (!sessionIdRef.current) {
+      console.warn('[Module3] Event listeners skipped due to missing session id')
+      return
+    }
         
     // Listen for batch updates via Server-Sent Events
     const batchEventSource = new EventSource('/api/perspective-update')
@@ -545,7 +586,7 @@ export function Module3() {
         if (data.type === 'batch') {
                     
           // Fetch the actual perspectives from backend (ONLY when notified)
-          const response = await fetch("/module3/api/output")
+          const response = await fetch(appendSessionParam("/module3/api/output"))
           if (response.ok) {
             const outputData = await response.json()
             
@@ -587,7 +628,7 @@ export function Module3() {
           setLoading(false)
           
           // Fetch the complete output.json one final time
-          const finalResponse = await fetch("/module3/api/output")
+          const finalResponse = await fetch(appendSessionParam("/module3/api/output"))
           if (finalResponse.ok) {
             const finalData = await finalResponse.json()
             
@@ -598,9 +639,9 @@ export function Module3() {
               // Fetch clustered output from backend final_output files
               try {
                 const [leftistRes, commonRes, rightistRes] = await Promise.all([
-                  fetch("/module3/module3/output/leftist"),
-                  fetch("/module3/module3/output/common"),
-                  fetch("/module3/module3/output/rightist")
+                  fetch(appendSessionParam("/module3/module3/output/leftist")),
+                  fetch(appendSessionParam("/module3/module3/output/common")),
+                  fetch(appendSessionParam("/module3/module3/output/rightist"))
                 ])
                 
                 if (leftistRes.ok && commonRes.ok && rightistRes.ok) {
@@ -676,6 +717,30 @@ export function Module3() {
   const getColorName = (color: string) => {
     // Return the color as-is, capitalize first letter
     return color.charAt(0).toUpperCase() + color.slice(1).toLowerCase()
+  }
+
+  const appendSessionParam = (path: string) => {
+    const id = sessionIdRef.current
+    if (!id) {
+      throw new Error('No active session available')
+    }
+    const separator = path.includes('?') ? '&' : '?'
+    return `${path}${separator}session_id=${encodeURIComponent(id)}`
+  }
+
+  if (sessionError) {
+    return (
+      <ModuleLayout
+        moduleNumber={3}
+        title="Perspective Generation"
+        description="AI generates multiple perspectives from various viewpoints, then two agents debate them to analyze the overall standing of information"
+        status="idle"
+      >
+        <div className="border border-yellow-500/30 bg-yellow-500/5 text-yellow-200 rounded p-6 text-sm">
+          {sessionError}
+        </div>
+      </ModuleLayout>
+    )
   }
 
   return (

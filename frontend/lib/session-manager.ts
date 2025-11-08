@@ -40,7 +40,7 @@ export interface FinalAnalysisData {
 }
 
 export interface SessionData {
-  sessionId: string
+  sessionId: string | null
   currentModule: number
   module1?: Module1Data
   module2?: Module2Data
@@ -54,13 +54,6 @@ export interface SessionData {
 
 const SESSION_KEY = 'pipeline_session'
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
-
-/**
- * Generate a unique session ID
- */
-function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-}
 
 /**
  * Get current session or create new one
@@ -90,9 +83,9 @@ export function getSession(): SessionData | null {
 /**
  * Create a new session
  */
-export function createSession(currentModule: number = 1): SessionData {
+export function createSession(currentModule: number = 1, sessionId: string | null = null): SessionData {
   const session: SessionData = {
-    sessionId: generateSessionId(),
+    sessionId,
     currentModule,
     createdAt: Date.now(),
     lastUpdated: Date.now()
@@ -100,7 +93,7 @@ export function createSession(currentModule: number = 1): SessionData {
 
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    console.log('[Session] New session created:', session.sessionId)
+    console.log('[Session] New session created:', session.sessionId ?? 'pending')
     return session
   } catch (error) {
     console.error('[Session] Error creating session:', error)
@@ -129,6 +122,28 @@ export function updateSession(updates: Partial<SessionData>): void {
   } catch (error) {
     console.error('[Session] Error updating session:', error)
   }
+}
+
+export function setSessionId(sessionId: string): void {
+  if (!sessionId) {
+    console.warn('[Session] Ignoring empty sessionId update')
+    return
+  }
+
+  updateSession({ sessionId })
+}
+
+export function getSessionId(): string | null {
+  const session = getSession()
+  return session?.sessionId ?? null
+}
+
+export function requireSessionId(): string {
+  const sessionId = getSessionId()
+  if (!sessionId) {
+    throw new Error('No active pipeline session found. Run Module 1 analysis first.')
+  }
+  return sessionId
 }
 
 /**
@@ -295,9 +310,12 @@ export function clearSession(): void {
  */
 export async function clearAllData(): Promise<void> {
   try {
+    const existingSession = getSession()
+    const existingSessionId = existingSession?.sessionId ?? null
+
     // Clear main session
     localStorage.removeItem(SESSION_KEY)
-    
+
     // Clear Module 3 perspective cache
     localStorage.removeItem('module3_perspective_cache')
     
@@ -307,20 +325,22 @@ export async function clearAllData(): Promise<void> {
     console.log('[Session] Frontend cache cleared')
     
     // Clear backend data
-    try {
-      // Clear Module 3 backend
-      await fetch('/module3/api/clear', { method: 'POST' })
-      console.log('[Session] Module 3 backend cleared')
-    } catch (err) {
-      console.warn('[Session] Failed to clear Module 3 backend:', err)
-    }
-    
-    try {
-      // Clear Module 4 backend
-      await fetch('/module4/api/clear', { method: 'POST' })
-      console.log('[Session] Module 4 backend cleared')
-    } catch (err) {
-      console.warn('[Session] Failed to clear Module 4 backend:', err)
+    if (existingSessionId) {
+      const encodedId = encodeURIComponent(existingSessionId)
+
+      try {
+        await fetch(`/module3/api/clear?session_id=${encodedId}`, { method: 'POST' })
+        console.log('[Session] Module 3 backend cleared')
+      } catch (err) {
+        console.warn('[Session] Failed to clear Module 3 backend:', err)
+      }
+
+      try {
+        await fetch(`/module4/api/clear?session_id=${encodedId}`, { method: 'POST' })
+        console.log('[Session] Module 4 backend cleared')
+      } catch (err) {
+        console.warn('[Session] Failed to clear Module 4 backend:', err)
+      }
     }
     
     console.log('[Session] All data cleared - ready for new session')

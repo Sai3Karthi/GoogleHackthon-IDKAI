@@ -2,37 +2,55 @@
     {
         "color": "red",
         "bias_x": 0.0,
-        "significance_y": 0.81,
-        "text": "The continued operation of 'Cat News' highlights a critical gap in public awareness about the real threats faced by wild cat populations."
+        "significance_y": 0.8,
+        "text": "This 'giveaway' is likely a sophisticated phishing scheme designed to harvest personal data for malicious purposes."
     },
     {
         "color": "orange",
-        "bias_x": 0.1905,
-        "significance_y": 0.74,
-        "text": "It would be beneficial to know if 'Cat News' also includes practical guidance for conservationists working on the ground."
+        "bias_x": 0.1463,
+        "significance_y": 0.8,
+        "text": "This could be a lead generation scheme, where the 'giveaway' is just an excuse to collect email addresses for future marketing campaigns."
     },
     {
         "color": "yellow",
-        "bias_x": 0.3333,
-        "significance_y": 0.73,
-        "text": "Understanding the readership demographics of 'Cat News' could help tailor its content to be more effective in reaching a wider audience."
-    },
-    {
-        "color": "orange",
-        "bias_x": 0.2857,
-        "significance_y": 0.68,
-        "text": "The focus on 'scientific papers' might alienate readers who are interested in broader conservation efforts and success stories."
+        "bias_x": 0.2927,
+        "significance_y": 0.8,
+        "text": "The website's design and the terms and conditions of the 'giveaway' would provide crucial clues about its legitimacy."
     },
     {
         "color": "red",
-        "bias_x": 0.0952,
-        "significance_y": 0.65,
-        "text": "Scientific papers in 'Cat News' are often behind paywalls, making them inaccessible to the general public and independent researchers."
+        "bias_x": 0.0488,
+        "significance_y": 0.7,
+        "text": "This is a textbook example of a dark pattern, luring unsuspecting users into a trap for financial or data gain."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0244,
+        "significance_y": 0.6,
+        "text": "The promise of something 'free' is a classic manipulation tactic used to bypass critical thinking and exploit vulnerability."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0976,
+        "significance_y": 0.6,
+        "text": "This kind of scam targets low-income individuals and the elderly, who are often more desperate for financial relief."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1707,
+        "significance_y": 0.6,
+        "text": "We need to be skeptical of any online offer that sounds too good to be true; it usually is."
     },
     {
         "color": "yellow",
-        "bias_x": 0.381,
-        "significance_y": 0.65,
-        "text": "The content of 'Cat News' likely represents a snapshot of current research, and it would be interesting to see how the topics have evolved over the decades."
+        "bias_x": 0.3171,
+        "significance_y": 0.6,
+        "text": "It's important to consider the source of the advertisement; was it from a trusted platform or a random pop-up?"
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0732,
+        "significance_y": 0.5,
+        "text": "The website is likely using aggressive pop-ups and hidden terms to force users into subscriptions or unwanted purchases."
     }
 ]

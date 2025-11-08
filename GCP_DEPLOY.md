@@ -1,4 +1,4 @@
-# 🚀 Google Cloud Deployment Guide
+# Google Cloud Deployment Guide
 
 ## Quick Deploy to Google Cloud Run (5 Minutes)
 
@@ -32,12 +32,20 @@ gcloud services enable cloudbuild.googleapis.com
 gcloud services enable artifactregistry.googleapis.com
 ```
 
-### Step 3: Deploy Frontend to Cloud Run
+### Step 3: Deploy Frontend to Cloud Run (Fast Script)
+
+```powershell
+# From repository root
+./deploy-frontend.ps1
+```
+
+The script prompts for the service name, region, and orchestrator API URL (`NEXT_PUBLIC_API_URL`) and runs `gcloud run deploy` from the `frontend/` directory. It defaults to `idkai-frontend`, region `asia-south1`, and the currently deployed orchestrator URL.
+
+#### Manual Command (optional)
 
 ```bash
 cd frontend
 
-# Build and deploy in one command
 gcloud run deploy idkai-frontend \
   --source . \
   --platform managed \
@@ -45,12 +53,6 @@ gcloud run deploy idkai-frontend \
   --allow-unauthenticated \
   --port 3000 \
   --set-env-vars NEXT_PUBLIC_API_URL=YOUR_BACKEND_URL
-
-# Cloud Build will:
-# - Build your Docker image
-# - Push to Artifact Registry
-# - Deploy to Cloud Run
-# - Give you a live URL
 ```
 
 **Time: 3-5 minutes**
@@ -64,7 +66,7 @@ and is serving 100 percent of traffic.
 Service URL: https://idkai-frontend-RANDOM.run.app
 ```
 
-**This is your live URL!** ✅
+**This is your live URL!**
 
 ---
 
@@ -129,6 +131,17 @@ gcloud run deploy idkai-frontend \
   --region us-central1
 ```
 
+For backend services, ensure the deployed endpoints propagate via environment variables so every module resolves URLs through `config_loader`:
+
+```bash
+gcloud run deploy idkai-orchestrator \
+  --source . \
+  --set-env-vars GEMINI_API_KEY=your-key,DEPLOYED_BACKEND_URL=https://idkai-backend-454838348123.asia-south1.run.app,DEPLOYED_FRONTEND_URL=https://idkai-frontend-454838348123.asia-south1.run.app \
+  --region us-central1
+```
+
+Repeat the same `DEPLOYED_BACKEND_URL` and `DEPLOYED_FRONTEND_URL` values for module1 through module4 so that runtime requests always route through the orchestrator proxy.
+
 Or update after deployment:
 ```bash
 gcloud run services update idkai-frontend \
@@ -178,16 +191,16 @@ gcloud run domain-mappings create \
 
 ## Deployment Files Created
 
-### ✅ Files Added:
+### Files Added:
 1. **`frontend/Dockerfile`** - Multi-stage Docker build
 2. **`frontend/.dockerignore`** - Exclude unnecessary files
 3. **`frontend/app.yaml`** - App Engine configuration (optional)
 
-### ✅ Files Updated:
+### Files Updated:
 1. **`frontend/next.config.js`** - Added `output: 'standalone'`
 2. **`frontend/package.json`** - Removed vercel-build script
 
-### ❌ Files Removed:
+### Files Removed:
 1. `frontend/vercel.json`
 2. `frontend/.vercelignore`
 3. `frontend/DEPLOY.md`
@@ -298,14 +311,14 @@ gcloud run services update idkai-frontend \
 
 ---
 
-## 🎯 Ready to Deploy?
+## Ready to Deploy?
 
 ```bash
 cd frontend
 gcloud run deploy idkai-frontend --source . --region us-central1 --allow-unauthenticated
 ```
 
-**That's it!** Your frontend will be live in 3-5 minutes. 🚀
+**That's it!** Your frontend will be live in 3-5 minutes.
 
 ---
 

@@ -4,9 +4,10 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
-import { saveModule1Data, getModule1Data, setCurrentModule } from "@/lib/session-manager"
+import { saveModule1Data, getModule1Data, setCurrentModule, setSessionId } from "@/lib/session-manager"
 
 interface AnalysisResult {
+  session_id: string
   input_type: string
   risk_level: string
   confidence: number
@@ -154,6 +155,9 @@ export function Module1() {
       }
 
       const data: AnalysisResult = await response.json()
+      if (data.session_id) {
+        setSessionId(data.session_id)
+      }
       setResult(data)
       
       // Save to session
@@ -222,6 +226,9 @@ export function Module1() {
       }
 
       const data: AnalysisResult = await response.json()
+      if (data.session_id) {
+        setSessionId(data.session_id)
+      }
       setResult(data)
       
       // Save to session

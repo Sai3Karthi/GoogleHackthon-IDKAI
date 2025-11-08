@@ -1,0 +1,56 @@
+[
+    {
+        "color": "red",
+        "bias_x": 0.0,
+        "significance_y": 0.8,
+        "text": "This is a textbook example of how predatory schemes use the allure of 'free' to exploit vulnerable individuals online."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1463,
+        "significance_y": 0.8,
+        "text": "While 'example.com' is a placeholder, its inclusion in a 'free giveaway' context is a strong indicator of a potentially deceptive operation."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.2927,
+        "significance_y": 0.8,
+        "text": "The term 'giveaway' is often used loosely online, and may not always mean a genuine prize."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0732,
+        "significance_y": 0.7,
+        "text": "The promise of a 'free giveaway' preys on financial insecurity and the hope for a quick solution."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1951,
+        "significance_y": 0.7,
+        "text": "The use of a seemingly legitimate URL, even a placeholder, makes the scam more convincing to the unsuspecting."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2683,
+        "significance_y": 0.7,
+        "text": "While the URL itself is benign, its context in a 'free giveaway' is a major red flag for potential online fraud."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0244,
+        "significance_y": 0.6,
+        "text": "The use of a placeholder domain like 'example.com' is a common tactic to make scams appear legitimate and less traceable."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1707,
+        "significance_y": 0.6,
+        "text": "This is a reminder to be extremely cautious of any online offer that promises something for nothing."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2439,
+        "significance_y": 0.6,
+        "text": "Educational initiatives are needed to teach people how to spot these kinds of online traps and avoid them."
+    }
+]

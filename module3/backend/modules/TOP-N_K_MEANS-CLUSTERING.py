@@ -1,7 +1,8 @@
 import json
-import numpy as np
-import sys
 import os
+import sys
+
+import numpy as np
 
 
 # --- DATA LOADING AND VISUALIZATION FUNCTIONS (No changes here) ---
@@ -120,8 +121,11 @@ def save_agents_data(leftist_data, rightist_data, common_data, output_dir="."):
 if __name__ == "__main__":
     # --- CONFIGURATION ---
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    DATA_FILENAME = os.path.join(script_dir, "../output.json")
-    output_directory = os.path.join(script_dir, "../final_output")
+    env_input_path = os.environ.get("MODULE3_OUTPUT_PATH")
+    env_output_dir = os.environ.get("MODULE3_FINAL_OUTPUT_DIR")
+
+    DATA_FILENAME = env_input_path or os.path.join(script_dir, "../output.json")
+    output_directory = env_output_dir or os.path.join(script_dir, "../final_output")
     os.makedirs(output_directory, exist_ok=True)
     
     # --- 1. LOAD DATA ---

@@ -1,38 +1,56 @@
 [
     {
-        "color": "blue",
-        "bias_x": 0.7143,
-        "significance_y": 0.9,
-        "text": "The continued operation of 'Cat News' is crucial for fostering collaboration and sharing best practices among felid conservationists worldwide."
+        "color": "violet",
+        "bias_x": 0.9268,
+        "significance_y": 0.96,
+        "text": "This is a clear sign of the digital wild west, where scammers operate with impunity."
     },
     {
         "color": "violet",
-        "bias_x": 0.9048,
-        "significance_y": 0.81,
-        "text": "This newsletter is a pillar of conservation knowledge, ensuring that the scientific community remains informed and united in its mission."
+        "bias_x": 0.9756,
+        "significance_y": 0.93,
+        "text": "We need to teach our children to be digitally savvy and to recognize these kinds of fraudulent schemes."
     },
     {
         "color": "blue",
-        "bias_x": 0.619,
-        "significance_y": 0.8,
-        "text": "The sustained publication of 'Cat News' is a testament to the dedication of the IUCN/SSC Cat Specialist Group and its contributors."
+        "bias_x": 0.6829,
+        "significance_y": 0.9,
+        "text": "The 'giveaway' is a psychological tactic designed to trigger a sense of urgency and FOMO (fear of missing out)."
     },
     {
         "color": "indigo",
-        "bias_x": 0.7619,
-        "significance_y": 0.8,
-        "text": "This is a prime example of how a dedicated, specialized organization can build and maintain a valuable communication platform over decades."
+        "bias_x": 0.8049,
+        "significance_y": 0.9,
+        "text": "We must be vigilant in educating ourselves and our children about the dangers of online scams and fraudulent offers."
     },
     {
-        "color": "green",
-        "bias_x": 0.5714,
-        "significance_y": 0.78,
-        "text": "The existence of 'Cat News' underscores the importance of specialized, peer-reviewed communication for advancing conservation science."
+        "color": "violet",
+        "bias_x": 0.878,
+        "significance_y": 0.89,
+        "text": "This is likely a sophisticated form of identity theft, where the 'giveaway' is a pretext for stealing your personal information."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9512,
+        "significance_y": 0.82,
+        "text": "The promise of 'free' is a powerful psychological trigger that scammers exploit to bypass critical thinking."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.5854,
+        "significance_y": 0.8,
+        "text": "This is likely a form of affiliate marketing, where the website gets paid to drive traffic or sign-ups for another company's product or service."
     },
     {
         "color": "indigo",
-        "bias_x": 0.8571,
-        "significance_y": 0.7,
-        "text": "This newsletter is a vital resource for anyone involved in the practical aspects of cat conservation, offering actionable insights."
+        "bias_x": 0.7317,
+        "significance_y": 0.8,
+        "text": "This is a textbook example of a clickbait scheme, designed to generate traffic and ad revenue through false promises."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9024,
+        "significance_y": 0.76,
+        "text": "The term 'free giveaway' is almost always a red flag for something sinister online."
     }
 ]

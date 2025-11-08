@@ -28,7 +28,8 @@ import math
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Set, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse, urlunparse
 
 # Load configuration
 try:
@@ -103,66 +104,93 @@ def load_config() -> Dict[str, Any]:
         return json.load(config_file)
 
 
-def run_pipeline(args: argparse.Namespace) -> int:
-    """Main pipeline for generating structured perspectives.
-    
-    Args:
-        args: Namespace object with input, output, endpoint, model, temperature attributes
-        
-    Returns:
-        Exit code (0 for success, 1 for failure)
-        
-    Raises:
-        SystemExit: If endpoint is not provided
-    """
-    statement, significance = load_input(args.input)
-    
+def _extract_statement_and_significance(payload: Dict[str, Any]) -> Tuple[str, float]:
+    statement = (
+        payload.get("text")
+        or payload.get("input")
+        or payload.get("topic")
+        or ""
+    )
+    statement = statement.strip()
+    if not statement:
+        raise ValueError("Input payload must include 'text' or 'topic'.")
+
+    significance_raw = (
+        payload.get("significance_score")
+        if payload.get("significance_score") is not None
+        else payload.get("significance")
+    )
+
+    try:
+        significance = float(significance_raw) if significance_raw is not None else 0.7
+    except (TypeError, ValueError):
+        significance = 0.7
+
+    if not (0.0 <= significance <= 1.0):
+        logger.warning("Significance %.3f outside [0, 1], clamping to range", significance)
+        significance = max(0.0, min(1.0, significance))
+
+    return statement, significance
+
+
+def generate_perspectives(
+    input_payload: Dict[str, Any],
+    *,
+    endpoint: Optional[str] = None,
+    temperature: float = 0.6,
+    stream_callback: Optional[Callable[[str, List[Dict[str, Any]]], None]] = None,
+    progress_callback: Optional[Callable[[str, List[Dict[str, Any]], List[Dict[str, Any]]], None]] = None,
+    output_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generate structured perspectives for the supplied input payload."""
+
+    statement, significance = _extract_statement_and_significance(input_payload)
+
     perspective_count = int(math.ceil(128 * (significance ** 2.8) + 8))
     logger.info(
-        f"Significance score: {significance:.3f}, "
-        f"calculated perspective count: {perspective_count}"
+        "Significance score: %.3f, calculated perspective count: %d",
+        significance,
+        perspective_count,
     )
-    
+
     scaffold = build_scaffold(perspective_count)
-    
-    # Try to get endpoint from args, environment variable, or deprecated model arg
-    endpoint = args.endpoint or os.environ.get(VERTEX_ENDPOINT_ENV) or args.model
-    if not endpoint:
-        logger.error("No endpoint provided. Use --endpoint or set VERTEX_ENDPOINT in .env")
-        raise SystemExit("No endpoint provided. Use --endpoint or set VERTEX_ENDPOINT in .env")
-    
+
+    resolved_endpoint = endpoint or os.environ.get(VERTEX_ENDPOINT_ENV)
+    if not resolved_endpoint:
+        raise RuntimeError("No endpoint provided. Set VERTEX_ENDPOINT or supply endpoint explicitly.")
+
     try:
-        client = build_client(endpoint)
-    except Exception as e:
-        logger.error(f"Client initialization failed: {e}", exc_info=True)
-        return 1
-    
-    # Clear output.json at start to avoid showing old data
-    base_dir = os.path.dirname(__file__)
-    output_path = os.path.join(base_dir, "..", args.output)
-    if os.path.exists(output_path):
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump({"input": statement, "perspectives": []}, f, indent=2, ensure_ascii=False)
-        logger.info("Cleared output.json to start fresh generation")
-    
+        client = build_client(resolved_endpoint)
+    except Exception as exc:
+        logger.error("Client initialization failed: %s", exc, exc_info=True)
+        raise
+
+    # Prepare output path if provided
+    json_output_path: Optional[str] = None
+    if output_path:
+        json_output_path = output_path
+        try:
+            write_output(json_output_path, {"input": statement, "perspectives": []})
+            logger.info("Cleared %s to start fresh generation", json_output_path)
+        except Exception as exc:
+            logger.warning("Unable to clear output file %s: %s", json_output_path, exc)
+
     existing_texts: Set[str] = set()
-    all_persp: List[Dict[str, Any]] = []
+    all_perspectives: List[Dict[str, Any]] = []
     color_groups = group_by_color(scaffold)
-    
-    stream_callback = getattr(args, "stream_callback", None)
 
     for group in color_groups:
-        color_name = group[0]['color']
-        logger.info(f"Processing {color_name} perspectives ({len(group)} items)")
+        color_name = group[0]["color"]
+        logger.info("Processing %s perspectives (%d items)", color_name, len(group))
 
         prompt_text = build_color_prompt(statement, group, existing_texts)
-        raw = call_model(client, endpoint, prompt_text, temperature=args.temperature)
+        raw = call_model(client, resolved_endpoint, prompt_text, temperature=temperature)
 
         try:
             generated = parse_model_output(raw)
-        except Exception as e:
-            logger.warning(f"{color_name} parse failed, retrying with lower temperature: {e}")
-            raw_retry = call_model(client, endpoint, prompt_text, temperature=0.2)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("%s parse failed, retrying with lower temperature: %s", color_name, exc)
+            raw_retry = call_model(client, resolved_endpoint, prompt_text, temperature=0.2)
             generated = parse_model_output(raw_retry)
 
         valid_perspectives, needs_repair = validate_and_categorize_perspectives(
@@ -170,31 +198,38 @@ def run_pipeline(args: argparse.Namespace) -> int:
         )
 
         if needs_repair:
-            logger.info(f"Repairing {len(needs_repair)} items for {color_name}")
-            repair_batches = [needs_repair[i:i+3] for i in range(0, len(needs_repair), 3)]
+            logger.info("Repairing %d items for %s", len(needs_repair), color_name)
+            repair_batches = [needs_repair[i : i + 3] for i in range(0, len(needs_repair), 3)]
 
             for batch in repair_batches:
                 repair_items = []
                 for _, slot, gen in batch:
-                    repair_items.append({
-                        "color": slot["color"],
-                        "bias_x": slot["bias_x"],
-                        "current_text": gen.get("text", ""),
-                        "current_significance": gen.get("significance_y", "")
-                    })
+                    repair_items.append(
+                        {
+                            "color": slot["color"],
+                            "bias_x": slot["bias_x"],
+                            "current_text": gen.get("text", ""),
+                            "current_significance": gen.get("significance_y", ""),
+                        }
+                    )
 
                 repair_prompt = build_repair_prompt(statement, repair_items, existing_texts)
 
                 try:
                     repair_raw = call_model(
-                        client, endpoint, repair_prompt, temperature=0.3, delay_after=1.5
+                        client,
+                        resolved_endpoint,
+                        repair_prompt,
+                        temperature=0.3,
+                        delay_after=1.5,
                     )
                     repair_results = parse_model_output(repair_raw)
                     repaired = process_repair_results(batch, repair_results, existing_texts)
                     valid_perspectives.extend(repaired)
-                except Exception as e:
-                    logger.warning(f"Repair failed for {color_name}, using fallbacks: {e}")
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Repair failed for %s, using fallbacks: %s", color_name, exc)
                     from modules.perspective_utils import create_fallback_perspective
+
                     fallback_perspectives = [
                         create_fallback_perspective(slot) for _, slot, _ in batch
                     ]
@@ -203,86 +238,103 @@ def run_pipeline(args: argparse.Namespace) -> int:
                     valid_perspectives.extend(fallback_perspectives)
 
         valid_perspectives.sort(key=lambda x: x["bias_x"])
-        all_persp.extend(valid_perspectives)
+        all_perspectives.extend(valid_perspectives)
 
-        # Write incrementally after each color so frontend can poll for updates
-        all_persp.sort(key=lambda x: x["bias_x"])
-        intermediate_obj = {"input": statement, "perspectives": all_persp}
-        write_output(args.output, intermediate_obj)
-        logger.info(f"Wrote {len(all_persp)} perspectives to {args.output} after {color_name} batch")
+        all_perspectives.sort(key=lambda x: x["bias_x"])
+        intermediate_obj = {"input": statement, "perspectives": all_perspectives}
 
-        # Notify frontend that new batch is available
+        if json_output_path:
+            write_output(json_output_path, intermediate_obj)
+
+        if progress_callback:
+            try:
+                progress_callback(color_name, valid_perspectives, list(all_perspectives))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Progress callback failed for %s: %s", color_name, exc)
+
         try:
-            import requests
-            # Get frontend URL from config
-            if config:
-                frontend_url = config.get_frontend_url()
-                frontend_ports = [config.get_frontend_port()]
-            else:
-                # Fallback to common frontend ports
-                frontend_url = "http://localhost"
-                frontend_ports = [3001, 3000]
-            
-            for port in frontend_ports:
-                try:
-                    url = f"{frontend_url.rsplit(':', 1)[0]}:{port}/api/perspective-update"
-                    requests.post(
-                        url,
-                        json={
-                            "color": color_name,
-                            "count": len(all_persp),
-                            "batch_size": len(valid_perspectives)
-                        },
-                        timeout=1
-                    )
-                    logger.info(f"Notified frontend at {url} of {color_name} batch update")
-                    break
-                except:
-                    continue
-        except Exception as e:
-            logger.warning(f"Failed to notify frontend: {e}")
+            target_frontend = config.get_frontend_url() if config else "http://localhost:3000"
+            parsed = urlparse(target_frontend)
+            target = parsed._replace(path="/api/perspective-update", query="", fragment="")
+            url = urlunparse(target)
+
+            requests.post(
+                url,
+                json={
+                    "color": color_name,
+                    "count": len(all_perspectives),
+                    "batch_size": len(valid_perspectives),
+                },
+                timeout=1,
+            )
+            logger.info("Notified frontend at %s of %s batch update", url, color_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to notify frontend: %s", exc)
 
         if stream_callback:
             try:
                 stream_callback(color_name, valid_perspectives)
-            except Exception as e:
-                logger.warning(f"Streaming callback failed for {color_name}: {e}")
-    
-    all_persp.sort(key=lambda x: x["bias_x"])
-    final_obj = {"input": statement, "perspectives": all_persp[:len(scaffold)]}
-    write_output(args.output, final_obj)
-    logger.info(f"Pipeline completed. Generated {len(final_obj['perspectives'])} perspectives")
-    
-    # Notify frontend that pipeline is complete
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Streaming callback failed for %s: %s", color_name, exc)
+
+    all_perspectives.sort(key=lambda x: x["bias_x"])
+    final_obj = {"input": statement, "perspectives": all_perspectives[: len(scaffold)]}
+
+    if json_output_path:
+        write_output(json_output_path, final_obj)
+        logger.info(
+            "Pipeline completed. Generated %d perspectives → %s",
+            len(final_obj["perspectives"]),
+            json_output_path,
+        )
+    else:
+        logger.info(
+            "Pipeline completed. Generated %d perspectives",
+            len(final_obj["perspectives"]),
+        )
+
     try:
-        import requests
-        # Get frontend URL from config
-        if config:
-            frontend_url = config.get_frontend_url()
-            frontend_ports = [config.get_frontend_port()]
-        else:
-            # Fallback to common frontend ports
-            frontend_url = "http://localhost"
-            frontend_ports = [3001, 3000]
-        
-        for port in frontend_ports:
-            try:
-                url = f"{frontend_url.rsplit(':', 1)[0]}:{port}/api/perspective-complete"
-                requests.post(
-                    url,
-                    json={
-                        "total_perspectives": len(final_obj['perspectives']),
-                        "status": "completed"
-                    },
-                    timeout=1
-                )
-                logger.info(f"Notified frontend at {url} of pipeline completion")
-                break
-            except:
-                continue
-    except Exception as e:
-        logger.warning(f"Failed to notify frontend of completion: {e}")
-    
+        target_frontend = config.get_frontend_url() if config else "http://localhost:3000"
+        parsed = urlparse(target_frontend)
+        target = parsed._replace(path="/api/perspective-complete", query="", fragment="")
+        url = urlunparse(target)
+
+        requests.post(
+            url,
+            json={
+                "total_perspectives": len(final_obj["perspectives"]),
+                "status": "completed",
+            },
+            timeout=1,
+        )
+        logger.info("Notified frontend at %s of pipeline completion", url)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to notify frontend of completion: %s", exc)
+
+    return final_obj
+
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    """CLI entry point compatible wrapper around ``generate_perspectives``."""
+
+    statement, significance = load_input(args.input)
+    input_payload = {
+        "input": statement,
+        "significance_score": significance,
+    }
+
+    try:
+        generate_perspectives(
+            input_payload,
+            endpoint=args.endpoint or args.model,
+            temperature=args.temperature,
+            stream_callback=getattr(args, "stream_callback", None),
+            output_path=args.output,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Pipeline execution failed: %s", exc, exc_info=True)
+        return 1
+
     return 0
 
 

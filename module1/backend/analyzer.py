@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 import logging
 from urllib.parse import urlparse
 from pathlib import Path
+import asyncio
 import httpx
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -119,8 +120,8 @@ Focus on:
 Respond ONLY with valid JSON, no markdown formatting."""
 
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        
+        response = await asyncio.to_thread(model.generate_content, prompt)
+
         response_text = response.text.strip()
         if response_text.startswith("```json"):
             response_text = response_text[7:]
@@ -129,9 +130,9 @@ Respond ONLY with valid JSON, no markdown formatting."""
         if response_text.endswith("```"):
             response_text = response_text[:-3]
         response_text = response_text.strip()
-        
+
         result = json.loads(response_text)
-        
+
         logger.info(f"Gemini analysis complete: {result.get('risk_level')} (confidence: {result.get('confidence')})")
         return result
     
@@ -190,16 +191,16 @@ Respond ONLY with valid JSON, no markdown formatting."""
             prompt += f"\n\nAdditional context provided by user: {context_text[:500]}"
         if url:
             prompt += f"\n\nSource URL: {url}"
-        
+
         model = genai.GenerativeModel('gemini-2.5-flash')
-        
+
         image_part = {
             "mime_type": mime_type,
             "data": image_data
         }
-        
-        response = model.generate_content([prompt, image_part])
-        
+
+        response = await asyncio.to_thread(model.generate_content, [prompt, image_part])
+
         response_text = response.text.strip()
         if response_text.startswith("```json"):
             response_text = response_text[7:]
@@ -208,9 +209,9 @@ Respond ONLY with valid JSON, no markdown formatting."""
         if response_text.endswith("```"):
             response_text = response_text[:-3]
         response_text = response_text.strip()
-        
+
         result = json.loads(response_text)
-        
+
         logger.info(f"Gemini image analysis complete: {result.get('risk_level')} (confidence: {result.get('confidence')})")
         return result
     

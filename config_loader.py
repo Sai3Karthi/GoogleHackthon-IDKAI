@@ -25,9 +25,23 @@ class Config:
             raise FileNotFoundError(f"Config file not found: {config_file}")
         
         self.config.read(config_file)
+
+    def _get_optional(self, section: str, option: str, fallback=None):
+        """Safely read values without raising when the section is missing."""
+        if not self.config.has_section(section):
+            return fallback
+        if not self.config.has_option(section, option):
+            return fallback
+        return self.config.get(section, option, fallback=fallback)
     
     def get_orchestrator_url(self):
         """Get full orchestrator URL"""
+        # If a deployed backend URL is provided via env, prefer it (production)
+        deployed_backend = os.getenv('DEPLOYED_BACKEND_URL')
+        if deployed_backend:
+            # strip trailing slash
+            return deployed_backend.rstrip('/')
+
         host = self.config.get('orchestrator', 'host', fallback='127.0.0.1')
         port = self.config.getint('orchestrator', 'port', fallback=8000)
         return f"http://{host}:{port}"
@@ -42,6 +56,11 @@ class Config:
     
     def get_module1_url(self):
         """Get full module1 URL"""
+        # If deployed backend is provided, return module path through orchestrator
+        deployed_backend = os.getenv('DEPLOYED_BACKEND_URL')
+        if deployed_backend:
+            return f"{deployed_backend.rstrip('/')}/module1"
+
         host = self.config.get('module1', 'host', fallback='127.0.0.1')
         port = self.config.getint('module1', 'port', fallback=8001)
         return f"http://{host}:{port}"
@@ -56,6 +75,10 @@ class Config:
     
     def get_module2_url(self):
         """Get full module2 URL"""
+        deployed_backend = os.getenv('DEPLOYED_BACKEND_URL')
+        if deployed_backend:
+            return f"{deployed_backend.rstrip('/')}/module2"
+
         host = self.config.get('module2', 'host', fallback='127.0.0.1')
         port = self.config.getint('module2', 'port', fallback=8002)
         return f"http://{host}:{port}"
@@ -70,6 +93,10 @@ class Config:
     
     def get_module3_url(self):
         """Get full module3 URL"""
+        deployed_backend = os.getenv('DEPLOYED_BACKEND_URL')
+        if deployed_backend:
+            return f"{deployed_backend.rstrip('/')}/module3"
+
         host = self.config.get('module3', 'host', fallback='127.0.0.1')
         port = self.config.getint('module3', 'port', fallback=8003)
         return f"http://{host}:{port}"
@@ -84,6 +111,10 @@ class Config:
     
     def get_module4_url(self):
         """Get full module4 URL"""
+        deployed_backend = os.getenv('DEPLOYED_BACKEND_URL')
+        if deployed_backend:
+            return f"{deployed_backend.rstrip('/')}/module4"
+
         host = self.config.get('module4', 'host', fallback='127.0.0.1')
         port = self.config.getint('module4', 'port', fallback=8004)
         return f"http://{host}:{port}"
@@ -98,6 +129,11 @@ class Config:
     
     def get_frontend_url(self):
         """Get full frontend URL"""
+        # Allow explicit deployed frontend URL via environment variable
+        deployed_frontend = os.getenv('DEPLOYED_FRONTEND_URL')
+        if deployed_frontend:
+            return deployed_frontend.rstrip('/')
+
         host = self.config.get('frontend', 'host', fallback='localhost')
         port = self.config.getint('frontend', 'port', fallback=3000)
         return f"http://{host}:{port}"
@@ -109,6 +145,32 @@ class Config:
     def get_frontend_port(self):
         """Get frontend port only"""
         return self.config.getint('frontend', 'port', fallback=3000)
+
+    def get_database_url(self):
+        """Resolve database connection string with environment overriding config."""
+        env_url = os.getenv('DATABASE_URL')
+        if env_url:
+            return env_url
+
+        cfg_url = self._get_optional('database', 'url')
+        if cfg_url:
+            return cfg_url
+
+        raise ValueError(
+            "Database URL not configured. Set DATABASE_URL environment variable or add [database] section to config.ini"
+        )
+
+    def get_database_echo(self):
+        """Optional SQL echo flag used for debugging."""
+        env_echo = os.getenv('DATABASE_ECHO')
+        if env_echo is not None:
+            return env_echo.lower() in {'1', 'true', 'yes', 'on'}
+
+        cfg_echo = self._get_optional('database', 'echo')
+        if cfg_echo is not None:
+            return str(cfg_echo).lower() in {'1', 'true', 'yes', 'on'}
+
+        return False
 
 
 # Singleton instance

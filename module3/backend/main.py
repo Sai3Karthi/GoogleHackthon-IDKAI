@@ -1,194 +1,393 @@
-"""
-Module3 FastAPI server for perspective generation pipeline.
+"""Module 3 service for perspective generation and persistence."""
 
-Provides REST API and WebSocket endpoints for running the perspective
-generation pipeline and streaming results to clients.
-"""
+from __future__ import annotations
 
 import os
 import sys
-import subprocess
-import threading
-import time
-import json
+
+if sys.platform.startswith("win"):
+    os.environ.setdefault("PYTHONASYNCIO_USE_SELECTOR", "1")
+
 import asyncio
-import argparse
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+import httpx
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, select
 
-# Setup logging
 try:
     from utils.logger import setup_logger
-    logger = setup_logger(__name__)
-except ImportError:
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('[%(levelname)s] %(name)s: %(message)s'))
-    logger.addHandler(handler)
 
-# Load environment variables from root .env file
+    logger = setup_logger(__name__)
+except ImportError:  # pragma: no cover - fallback for minimal environments
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT_DIR))
+
 try:
-    root = Path(__file__).parent.parent.parent
-    sys.path.insert(0, str(root))
     from utils.env_loader import load_env_file
-    
-    env_path = root / '.env'
+
+    env_path = ROOT_DIR / ".env"
     if load_env_file(env_path):
-        logger.info(f"Environment variables loaded from {env_path}")
-    else:
-        logger.warning(f"No .env file found at {env_path}")
+        logger.info("Environment variables loaded from %s", env_path)
 except (ImportError, ValueError):
-    # Fallback to dotenv if utils not available
     try:
         from dotenv import load_dotenv
-        env_path = Path(__file__).parent.parent.parent / '.env'
+
+        env_path = ROOT_DIR / ".env"
         load_dotenv(env_path)
-        logger.info(f"Environment variables loaded from {env_path}")
+        logger.info("Environment variables loaded via python-dotenv from %s", env_path)
     except ImportError:
-        logger.info("python-dotenv not available, using system environment variables")
+        logger.info("Using system environment variables (python-dotenv not available)")
 
-# Add main_modules to path to import api_request
-sys.path.append(os.path.join(os.path.dirname(__file__), 'main_modules'))
-from main_modules import api_request
 
-# Load configuration
 try:
     from config_loader import get_config
+
     config = get_config()
     logger.info("Configuration loaded successfully")
-except Exception as e:
-    logger.warning(f"Could not load config: {e}. Using defaults.")
+except Exception as config_error:  # pylint: disable=broad-except
+    logger.warning("Could not load config: %s. Using environment defaults.", config_error)
     config = None
 
-# Event to signal server shutdown
+from database import (  # type: ignore  # added after adjusting sys.path
+    initialize_database_schema,
+    get_async_session,
+    get_module_result,
+    get_pipeline_session,
+    save_module_result,
+    update_session_status,
+    ModuleResult,
+    ModuleResultNotFoundError,
+    SessionNotFoundError,
+)
+
+sys.path.append(str(Path(__file__).parent / "main_modules"))
+from main_modules import api_request
+
+
+MODULE3_RESULT_NAME = "module3"
+MODULE4_INPUT_NAME = "module4_input"
+MODULE3_INPUT_NAME = "module3_input"
+
+if config:
+    HOST = config.get_module3_host()
+    PORT = config.get_module3_port()
+    FRONTEND_PORT = config.get_frontend_port()
+    FRONTEND_URL = config.get_frontend_url()
+else:
+    HOST = os.getenv("HOST", "127.0.0.1")
+    PORT = int(os.getenv("MODULE3_PORT", 8003))
+    FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", 3000))
+    FRONTEND_URL = os.getenv("FRONTEND_URL", f"http://localhost:{FRONTEND_PORT}")
+
+port_override = os.getenv("PORT")
+if port_override:
+    PORT = int(port_override)
+    HOST = "0.0.0.0"
+
+allowed_origins = [
+    origin
+    for origin in [
+        FRONTEND_URL,
+        f"http://localhost:{FRONTEND_PORT}",
+        f"http://127.0.0.1:{FRONTEND_PORT}",
+    ]
+    if origin
+]
+allowed_origins = list(dict.fromkeys(allowed_origins))
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+_concurrency_raw = os.getenv("MODULE3_MAX_CONCURRENCY", "4").strip()
+if not _concurrency_raw:
+    _concurrency_raw = "4"
+try:
+    MAX_CONCURRENT_PIPELINES = int(_concurrency_raw)
+    if MAX_CONCURRENT_PIPELINES <= 0:
+        MAX_CONCURRENT_PIPELINES = None
+except ValueError:
+    MAX_CONCURRENT_PIPELINES = 4
+
+
+class RunPipelineRequest(BaseModel):
+    session_id: str = Field(..., description="Pipeline session identifier from Module 1")
+    send_to_module4: bool = Field(
+        default=False,
+        description="Forward generated perspectives to Module 4 after completion",
+    )
+
+
+class SendToModule4Request(BaseModel):
+    session_id: str = Field(..., description="Pipeline session identifier")
+
+
+CATEGORY_KEYS: Tuple[str, str, str] = ("leftist", "rightist", "common")
+LEFTIST_THRESHOLD = 0.428
+RIGHTIST_THRESHOLD = 0.571
+
+
+def clamp_bias(value: Any) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.5
+
+
+def safe_significance(value: Any) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def determine_target_size(total: int) -> int:
+    """Mirror historical clustering thresholds to preserve debate payload size."""
+    if total <= 0:
+        return 0
+    if 7 <= total <= 14:
+        return 6
+    if 15 <= total <= 28:
+        return 14
+    if 29 <= total <= 77:
+        return 21
+    if 78 <= total <= 136:
+        return 28
+    return total
+
+
+def allocate_category_slots(counts: Dict[str, int], target: int) -> Dict[str, int]:
+    """Determine how many items to keep for each bias category."""
+    if target <= 0:
+        return {key: 0 for key in CATEGORY_KEYS}
+
+    total_available = sum(max(counts.get(key, 0), 0) for key in CATEGORY_KEYS)
+    if total_available == 0 or target >= total_available:
+        return {key: max(counts.get(key, 0), 0) for key in CATEGORY_KEYS}
+
+    provisional: Dict[str, int] = {}
+    for key in CATEGORY_KEYS:
+        pool_size = max(counts.get(key, 0), 0)
+        if pool_size == 0:
+            provisional[key] = 0
+            continue
+        share = (pool_size / total_available) * target
+        provisional[key] = min(pool_size, int(round(share)))
+
+    allocated = sum(provisional.values())
+
+    while allocated > target:
+        candidate = max(
+            CATEGORY_KEYS,
+            key=lambda key: (provisional[key], counts.get(key, 0)),
+        )
+        if provisional[candidate] == 0:
+            break
+        provisional[candidate] -= 1
+        allocated -= 1
+
+    while allocated < target:
+        candidate = max(
+            CATEGORY_KEYS,
+            key=lambda key: (counts.get(key, 0) - provisional[key], counts.get(key, 0)),
+        )
+        capacity = counts.get(candidate, 0) - provisional[candidate]
+        if capacity <= 0:
+            break
+        provisional[candidate] += 1
+        allocated += 1
+
+    return provisional
+
+
+def distribute_perspectives(
+    perspectives: List[Dict[str, Any]]
+) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, Any]]:
+    """Derive a trimmed, bias-balanced perspective set with summary metadata."""
+    pools: Dict[str, List[Dict[str, Any]]] = {key: [] for key in CATEGORY_KEYS}
+
+    for item in perspectives:
+        if not isinstance(item, dict):
+            continue
+
+        normalized = dict(item)
+        normalized["bias_x"] = clamp_bias(normalized.get("bias_x"))
+        normalized["significance_y"] = safe_significance(normalized.get("significance_y"))
+
+        bias_value = normalized["bias_x"]
+        if bias_value < LEFTIST_THRESHOLD:
+            pools["leftist"].append(normalized)
+        elif bias_value > RIGHTIST_THRESHOLD:
+            pools["rightist"].append(normalized)
+        else:
+            pools["common"].append(normalized)
+
+    total_generated = sum(len(pool) for pool in pools.values())
+    target_size = determine_target_size(total_generated)
+
+    if target_size >= total_generated:
+        summary = {
+            "total_generated": total_generated,
+            "target_size": target_size,
+            "category_counts": {key: len(pool) for key, pool in pools.items()},
+            "distribution_source": "direct",
+        }
+        return pools, summary
+
+    allocations = allocate_category_slots(
+        {key: len(pool) for key, pool in pools.items()},
+        target_size,
+    )
+
+    selected: Dict[str, List[Dict[str, Any]]] = {}
+    for key in CATEGORY_KEYS:
+        pool = pools.get(key, [])
+        allocation = max(allocations.get(key, 0), 0)
+        if allocation == 0 or not pool:
+            selected[key] = []
+            continue
+        sorted_pool = sorted(
+            pool,
+            key=lambda item: safe_significance(item.get("significance_y")),
+            reverse=True,
+        )
+        selected[key] = sorted_pool[:allocation]
+
+    selected_total = sum(len(items) for items in selected.values())
+    summary = {
+        "total_generated": total_generated,
+        "target_size": target_size,
+        "category_counts": {key: len(selected.get(key, [])) for key in CATEGORY_KEYS},
+        "pool_counts": {key: len(pools.get(key, [])) for key in CATEGORY_KEYS},
+        "allocations": allocations,
+        "selected_total": selected_total,
+        "shortfall": max(0, target_size - selected_total),
+        "distribution_source": "stratified_selection",
+    }
+    return selected, summary
+
+
+class PipelineRegistryError(RuntimeError):
+    """Base exception for pipeline registry operations."""
+
+
+class PipelineAlreadyRunningError(PipelineRegistryError):
+    """Raised when attempting to start a pipeline that is already running."""
+
+
+class PipelineCapacityExceededError(PipelineRegistryError):
+    """Raised when the registry has reached its concurrency capacity."""
+
+
+@dataclass
+class PipelineJob:
+    session_id: str
+    send_to_module4: bool
+    started_at: datetime
+    task: asyncio.Task
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "send_to_module4": self.send_to_module4,
+            "started_at": self.started_at.isoformat(),
+            "done": self.task.done(),
+        }
+
+
+class PipelineRegistry:
+    def __init__(self, max_concurrent: Optional[int] = None) -> None:
+        self._max_concurrent = max_concurrent if (max_concurrent or 0) > 0 else None
+        self._lock = asyncio.Lock()
+        self._jobs: Dict[str, PipelineJob] = {}
+
+    async def start(self, session_id: str, send_to_module4: bool, runner) -> None:
+        async with self._lock:
+            if session_id in self._jobs and not self._jobs[session_id].task.done():
+                raise PipelineAlreadyRunningError(f"Session {session_id} already running")
+
+            active_jobs = [job for job in self._jobs.values() if not job.task.done()]
+            if self._max_concurrent is not None and len(active_jobs) >= self._max_concurrent:
+                raise PipelineCapacityExceededError(
+                    f"Maximum concurrent pipelines ({self._max_concurrent}) reached"
+                )
+
+            task = asyncio.create_task(runner(session_id, send_to_module4))
+            job = PipelineJob(
+                session_id=session_id,
+                send_to_module4=send_to_module4,
+                started_at=datetime.now(timezone.utc),
+                task=task,
+            )
+            self._jobs[session_id] = job
+            task.add_done_callback(lambda finished: asyncio.create_task(self._finalize(session_id, finished)))
+
+    async def _finalize(self, session_id: str, task: asyncio.Task) -> None:
+        try:
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    "Pipeline task failed for session %s: %s",
+                    session_id,
+                    exc,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+        except asyncio.CancelledError:
+            logger.warning("Pipeline task cancelled for session %s", session_id)
+        finally:
+            async with self._lock:
+                job = self._jobs.get(session_id)
+                if job and job.task is task:
+                    self._jobs.pop(session_id, None)
+
+    async def snapshot(self) -> List[Dict[str, Any]]:
+        async with self._lock:
+            return [job.as_dict() for job in self._jobs.values() if not job.task.done()]
+
+    async def is_running(self, session_id: str) -> bool:
+        async with self._lock:
+            job = self._jobs.get(session_id)
+            return bool(job and not job.task.done())
+
+    async def active_count(self) -> int:
+        async with self._lock:
+            return sum(1 for job in self._jobs.values() if not job.task.done())
+
+
+pipeline_registry = PipelineRegistry(MAX_CONCURRENT_PIPELINES)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for FastAPI application.
-    
-    Runs the full module3 pipeline on startup:
-    1. Generates perspectives (output.json)
-    2. Runs clustering to create final_output JSON files
-    
-    Also starts a background thread to monitor shutdown signals.
-    """
-    def run_full_pipeline():
-        """Run the complete module3 pipeline."""
-        try:
-            args = argparse.Namespace(
-                input="input.json",
-                output="output.json",
-                endpoint=None,
-                model=None,
-                temperature=0.6
-            )
-            
-            # Step 1: Run perspective generation pipeline
-            logger.info("Starting perspective generation pipeline")
-            pipeline_code = api_request.run_pipeline(args)
-            if pipeline_code != 0:
-                logger.error(f"Pipeline failed with exit code {pipeline_code}")
-                return False
-            logger.info("Pipeline completed successfully - output.json generated")
-            
-            # Step 2: Run clustering to generate final_output JSON files
-            logger.info("Starting clustering process to generate final_output files")
-            if not run_clustering():
-                logger.error("Clustering failed")
-                return False
-            logger.info("Clustering completed successfully - final_output files generated")
-            
-            # Verify all three files exist
-            base_dir = Path(__file__).parent
-            final_output_dir = base_dir / "final_output"
-            required_files = ["leftist.json", "rightist.json", "common.json"]
-            all_files_exist = all((final_output_dir / f).exists() for f in required_files)
-            
-            if all_files_exist:
-                logger.info("All three perspective files generated successfully:")
-                for f in required_files:
-                    file_path = final_output_dir / f
-                    logger.info(f"  ✓ {file_path}")
-            else:
-                logger.warning("Some required files are missing:")
-                for f in required_files:
-                    file_path = final_output_dir / f
-                    if not file_path.exists():
-                        logger.warning(f"  ✗ {file_path} - MISSING")
-                    else:
-                        logger.info(f"  ✓ {file_path}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"Error running full pipeline: {e}", exc_info=True)
-            return False
-        finally:
-            logger.info("Full pipeline execution completed")
-    
-    # Don't run the pipeline automatically - wait for API call
-    logger.info("Module3 server started. Waiting for API call to start pipeline...")
-
-    yield
-
-def run_clustering() -> bool:
-    """Run the clustering process after perspectives are generated.
-    
-    Returns:
-        True if clustering completed successfully, False otherwise
-    """
-    clustering_file = Path(__file__).parent / "modules" / "TOP-N_K_MEANS-CLUSTERING.py"
-    
+    logger.info("Module3 server starting up...")
     try:
-        result = subprocess.run(
-            [sys.executable, str(clustering_file)],
-            cwd=os.path.dirname(__file__),
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        logger.info("Clustering completed successfully")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Clustering failed with exit code {e.returncode}: {e.stderr}")
-        return False
-    except Exception as e:
-        logger.error(f"Error running clustering: {e}", exc_info=True)
-        return False
+        initialize_database_schema()
+        logger.info("Database schema ensured")
+    except Exception as db_error:  # pylint: disable=broad-except
+        logger.error("Failed to initialize database schema: %s", db_error)
+        raise
+    yield
+    logger.info("Module3 server shutting down...")
+
 
 app = FastAPI(
     title="Module3 Perspective Generation API",
-    version="1.0.0",
-    description="API for generating and streaming political perspectives",
-    lifespan=lifespan
+    description="Generates political perspectives using Vertex AI and persists the output",
+    version="2.0.0",
+    lifespan=lifespan,
 )
-
-# Add CORS middleware to allow frontend access
-# Build allowed origins from config
-allowed_origins = []
-if config:
-    frontend_url = config.get_frontend_url()
-    allowed_origins.append(frontend_url)
-    # Also add localhost variants for development
-    frontend_port = config.get_frontend_port()
-    allowed_origins.extend([
-        f"http://localhost:{frontend_port}",
-        f"http://127.0.0.1:{frontend_port}"
-    ])
-else:
-    # Fallback origins if config not available
-    allowed_origins = [
-        "http://localhost:3000", 
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001"
-    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,422 +397,477 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global pipeline state
-pipeline_running = False
 
-@app.post("/api/run_pipeline_stream")
-async def run_pipeline_stream() -> JSONResponse:
-    """Trigger perspective generation pipeline and notify frontend via POST requests.
-    
-    Returns:
-        JSONResponse with status
-    """
-    global pipeline_running
-    
-    def run_full_pipeline():
-        """Run the complete pipeline in background."""
-        global pipeline_running
-        
-        try:
-            pipeline_running = True
-            logger.info("Starting perspective generation pipeline")
-            
-            # Clear old clustering files to ensure fresh state
-            base_dir = Path(__file__).parent
-            final_output_dir = base_dir / "final_output"
-            for filename in ["leftist.json", "rightist.json", "common.json"]:
-                file_path = final_output_dir / filename
-                if file_path.exists():
-                    file_path.unlink()
-                    logger.info(f"Cleared old {filename}")
-            
-            # Step 1: Generate perspectives
-            args = argparse.Namespace(
-                input="input.json",
-                output="output.json",
-                endpoint=None,
-                model=None,
-                temperature=0.6
-            )
-            
-            pipeline_code = api_request.run_pipeline(args)
-            if pipeline_code != 0:
-                logger.error(f"Pipeline failed with exit code {pipeline_code}")
-                pipeline_running = False
-                return
-            
-            logger.info("Pipeline completed successfully - output.json generated")
-            
-            # Step 2: Run clustering
-            logger.info("Starting clustering process")
-            if not run_clustering():
-                logger.error("Clustering failed")
-                pipeline_running = False
-                return
-            
-            logger.info("Clustering completed successfully - final_output files generated")
-            
-            # Mark as complete
-            pipeline_running = False
-            
-            # Verify all files exist
-            required_files = ["leftist.json", "rightist.json", "common.json"]
-            all_files_exist = all((final_output_dir / f).exists() for f in required_files)
-            
-            if all_files_exist:
-                logger.info("All three perspective files generated successfully")
-                
-                # Automatically send data to Module 4
-                try:
-                    logger.info("Sending perspective data to Module 4 backend...")
-                    module4_url = "https://idk-backend-382118575811.asia-south1.run.app"
-                    
-                    perspectives_data = {}
-                    for category in required_files:
-                        file_path = final_output_dir / category
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            perspectives_data[category.replace('.json', '')] = json.load(f)
-                    
-                    response = requests.post(
-                        f"{module4_url}/upload-perspectives",
-                        json={
-                            "common": perspectives_data.get("common"),
-                            "leftist": perspectives_data.get("leftist"),
-                            "rightist": perspectives_data.get("rightist")
-                        },
-                        headers={"Content-Type": "application/json"},
-                        timeout=30
-                    )
-                    
-                    if response.status_code == 200:
-                        logger.info("Successfully sent perspective data to Module 4")
-                    else:
-                        logger.warning(f"Module 4 returned status {response.status_code}: {response.text}")
-                except Exception as e:
-                    logger.warning(f"Failed to send data to Module 4 (non-critical): {e}")
-            else:
-                logger.warning("Some required files are missing")
-                
-        except Exception as e:
-            logger.error(f"Pipeline execution failed: {e}", exc_info=True)
-            pipeline_running = False
-    
-    # Start pipeline in background thread
-    threading.Thread(target=run_full_pipeline, daemon=True).start()
-    
-    return JSONResponse({"status": "started", "message": "Pipeline started in background"})
+# ---------------------------------------------------------------------------
+# Helper utilities
+# ---------------------------------------------------------------------------
 
-@app.post("/api/clear")
-async def clear_all_data():
-    """Clear all perspective data - for new session"""
+
+async def fetch_session_or_404(session_id: Optional[str]) -> str:
+    if not session_id or not str(session_id).strip():
+        raise HTTPException(status_code=400, detail="session_id query parameter is required.")
+
     try:
-        base_dir = Path(__file__).parent
-        final_output_dir = base_dir / "final_output"
-        
-        files_to_remove = [
-            base_dir / "output.json",
-            base_dir / "input.json",
-            final_output_dir / "leftist.json",
-            final_output_dir / "rightist.json",
-            final_output_dir / "common.json"
-        ]
-        
-        removed_files = []
-        for file_path in files_to_remove:
-            if file_path.exists():
-                file_path.unlink()
-                removed_files.append(file_path.name)
-        
-        logger.info(f"Cleared {len(removed_files)} files for new session")
-        
-        return {
-            "status": "success",
-            "message": "All Module 3 data cleared",
-            "files_removed": removed_files
-        }
-    except Exception as e:
-        logger.error(f"Failed to clear data: {e}", exc_info=True)
-        return JSONResponse(
-            {"error": f"Failed to clear data: {str(e)}"},
-            status_code=500
+        session = await get_pipeline_session(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found") from exc
+
+    return str(session.id)
+
+
+async def fetch_session_for_processing(session_id: str) -> None:
+    try:
+        session_record = await get_pipeline_session(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found") from exc
+
+    if session_record.status not in {"module2_completed", "module3_processing", "module3_completed"}:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Session {session_id} is in status '{session_record.status}' and cannot be processed by Module 3."
+            ),
         )
 
-@app.get("/api/status")
-async def check_status() -> Dict[str, Any]:
-    """Check the current status of the pipeline processing.
-    
-    Returns:
-        Dictionary with status and progress information
-    """
-    global pipeline_running
-    
-    base_dir = Path(__file__).parent
-    output_exists = (base_dir / "output.json").exists()
-    clustering_exists = (base_dir / "final_output" / "common.json").exists()
-    
-    # Check the pipeline_running flag first
-    if pipeline_running:
-        return {"status": "processing", "progress": 50, "pipeline_complete": False}
-    elif clustering_exists:
-        return {"status": "completed", "progress": 100, "pipeline_complete": True}
-    elif output_exists:
-        return {"status": "processing", "progress": 50, "pipeline_complete": False}
-    else:
-        return {"status": "idle", "progress": 0, "pipeline_complete": False}
 
-@app.get("/api/output")
-async def get_output() -> JSONResponse:
-    """Get the current output.json file with all generated perspectives.
-    
-    Returns:
-        JSONResponse with perspectives data or empty structure
-    """
-    base_dir = Path(__file__).parent
-    output_file = base_dir / "output.json"
-    
-    if not output_file.exists():
-        # Return empty structure if file doesn't exist yet
-        return JSONResponse({"perspectives": []})
-    
+async def load_module3_input(session_id: str) -> Dict[str, Any]:
     try:
-        with open(output_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            logger.debug(f"Successfully loaded output data with {len(data.get('perspectives', []))} perspectives")
-            return JSONResponse(data)
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in output file: {e}")
-        return JSONResponse({"perspectives": []})
-    except IOError as e:
-        logger.error(f"File read error for output: {e}")
-        return JSONResponse({"perspectives": []})
+        module_result = await get_module_result(session_id, MODULE3_INPUT_NAME)
+    except ModuleResultNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Module 3 input not found for the requested session.",
+        ) from exc
+
+    payload = module_result.payload or {}
+    if not payload:
+        raise HTTPException(
+            status_code=400,
+            detail="Module 3 input payload is empty. Run Module 2 before Module 3.",
+        )
+    return payload
+
+
+def build_storage_payload(
+    session_id: str,
+    module3_input: Dict[str, Any],
+    perspectives: Any,
+    *,
+    final_output: Optional[Dict[str, Any]] = None,
+    stage: str = "pending",
+) -> Dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "input": module3_input,
+        "perspectives": perspectives,
+        "final_output": final_output,
+    }
+
+
+async def persist_results(
+    session_id: str,
+    storage_payload: Dict[str, Any],
+    *,
+    status: str,
+    include_module4: bool,
+) -> None:
+    await save_module_result(
+        session_id=session_id,
+        module_name=MODULE3_RESULT_NAME,
+        payload=storage_payload,
+        status=status,
+    )
+
+    if not include_module4:
+        return
+
+    final_output = storage_payload.get("final_output")
+    if isinstance(final_output, dict) and final_output:
+        await save_module_result(
+            session_id=session_id,
+            module_name=MODULE4_INPUT_NAME,
+            payload=final_output,
+            status="ready",
+        )
+
+
+async def send_to_module4(session_id: str, final_output: Dict[str, Any]) -> None:
+    if config:
+        module4_url = config.get_module4_url()
+    else:
+        module4_url = "http://127.0.0.1:8004"
+
+    payload = {
+        "session_id": session_id,
+        "leftist": final_output.get("leftist"),
+        "rightist": final_output.get("rightist"),
+        "common": final_output.get("common"),
+        "summary": final_output.get("summary"),
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(
+                f"{module4_url.rstrip('/')}/upload-perspectives",
+                json=payload,
+            )
+            if response.status_code == 200:
+                logger.info("Module 4 acknowledged perspectives for session %s", session_id)
+            else:
+                logger.warning(
+                    "Module 4 returned status %s for session %s: %s",
+                    response.status_code,
+                    session_id,
+                    response.text,
+                )
+        except httpx.HTTPError as exc:  # pragma: no cover - network dependent
+            logger.warning("Failed to reach Module 4 for session %s: %s", session_id, exc)
+
+
+async def execute_pipeline(
+    session_id: str,
+    send_to_m4: bool,
+    module3_input: Optional[Dict[str, Any]] = None,
+) -> None:
+    await fetch_session_for_processing(session_id)
+    if module3_input is None:
+        module3_input = await load_module3_input(session_id)
+
+    await update_session_status(session_id, "module3_processing")
+
+    try:
+        generation_result = await asyncio.to_thread(
+            api_request.generate_perspectives,
+            module3_input,
+        )
+        base_perspectives = []
+        if isinstance(generation_result, dict):
+            base_perspectives = generation_result.get("perspectives", [])
+
+        if not base_perspectives:
+            raise RuntimeError("Perspective generation produced no results.")
+
+        partial_payload = build_storage_payload(
+            session_id,
+            module3_input,
+            base_perspectives,
+            final_output=None,
+            stage="perspectives_ready",
+        )
+        await persist_results(
+            session_id,
+            partial_payload,
+            status="processing",
+            include_module4=False,
+        )
+        logger.info("Base perspectives stored for session %s", session_id)
+
+        distribution, summary = await asyncio.to_thread(
+            distribute_perspectives,
+            base_perspectives,
+        )
+        final_output_payload: Dict[str, Any] = {**distribution, "summary": summary}
+        logger.info("Perspective distribution for session %s: %s", session_id, summary)
+        if summary.get("shortfall", 0):
+            logger.warning(
+                "Perspective distribution shortfall detected for session %s: %s",
+                session_id,
+                summary["shortfall"],
+            )
+        final_perspectives = base_perspectives
+        final_payload = build_storage_payload(
+            session_id,
+            module3_input,
+            final_perspectives,
+            final_output=final_output_payload,
+            stage="completed",
+        )
+        await persist_results(
+            session_id,
+            final_payload,
+            status="completed",
+            include_module4=True,
+        )
+        await update_session_status(session_id, "module3_completed")
+
+        final_output = final_payload.get("final_output")
+        if send_to_m4 and isinstance(final_output, dict):
+            await send_to_module4(session_id, final_output)
+
+        logger.info("Module 3 completed for session %s", session_id)
+
+    except Exception as exc:  # pylint: disable=broad-except
+        await update_session_status(session_id, "module2_completed")
+        logger.exception("Module 3 pipeline failed for session %s", session_id)
+        storage_payload = {
+            "session_id": session_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(exc),
+        }
+        await save_module_result(
+            session_id=session_id,
+            module_name=MODULE3_RESULT_NAME,
+            payload=storage_payload,
+            status="failed",
+        )
+
+
+async def get_module3_payload(session_id: str) -> Dict[str, Any]:
+    try:
+        result = await get_module_result(session_id, MODULE3_RESULT_NAME)
+    except ModuleResultNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Module 3 output not available.") from exc
+    return result.payload or {}
+
+
+async def purge_module_results(
+    module_names: List[str],
+    session_uuid: Optional[uuid.UUID] = None,
+) -> int:
+    if not module_names:
+        return 0
+
+    normalized = [name.lower() for name in module_names if isinstance(name, str)]
+    if not normalized:
+        return 0
+
+    async with get_async_session() as session:
+        stmt = delete(ModuleResult).where(ModuleResult.module_name.in_(normalized))
+        if session_uuid is not None:
+            stmt = stmt.where(ModuleResult.session_id == session_uuid)
+
+        result = await session.execute(stmt)
+        await session.commit()
+        return result.rowcount or 0
+
+
+# ---------------------------------------------------------------------------
+# API endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/")
+async def root() -> Dict[str, Any]:
+    return {
+        "message": "Module 3 perspective generator",
+        "version": "2.0.0",
+        "endpoints": {
+            "POST /api/run_pipeline_stream": "Run perspective pipeline for a session",
+            "GET /api/input": "Retrieve Module 3 input payload",
+            "GET /api/output": "Retrieve Module 3 output payload",
+            "GET /module3/output/{category}": "Retrieve a specific perspective set",
+            "POST /api/send_to_module4": "Forward stored results to Module 4",
+            "GET /api/status": "Pipeline + persistence status",
+            "GET /api/health": "Health check",
+        },
+    }
+
 
 @app.get("/api/health")
 async def health_check() -> Dict[str, Any]:
-    """Health check endpoint to verify server is running.
-    
-    Returns:
-        Dictionary with health status information
-    """
+    db_status = "reachable"
+    try:
+        async with get_async_session() as session:
+            await session.execute(select(1))
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Database health check failed: %s", exc)
+        db_status = f"error: {exc}"
+
+    active_pipelines = await pipeline_registry.active_count()
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "reachable" else "degraded",
         "server_time": time.time(),
-        "backend_version": "1.0.0",
-        "pipeline_running": pipeline_running
+        "active_pipelines": active_pipelines,
+        "max_concurrency": MAX_CONCURRENT_PIPELINES,
+        "database": db_status,
+    }
+
+
+@app.get("/api/status")
+async def get_status(
+    session_id: str = Query(..., description="Pipeline session identifier")
+) -> Dict[str, Any]:
+    resolved_session = await fetch_session_or_404(session_id)
+
+    module3_available = False
+    module3_stage: Optional[str] = None
+    final_output_ready = False
+    try:
+        result = await get_module_result(resolved_session, MODULE3_RESULT_NAME)
+        module3_available = True
+        payload = result.payload or {}
+        module3_stage = payload.get("stage") if isinstance(payload, dict) else None
+        final_data = payload.get("final_output") if isinstance(payload, dict) else None
+        final_output_ready = isinstance(final_data, dict) and bool(final_data)
+    except ModuleResultNotFoundError:
+        module3_available = False
+
+    active_jobs = await pipeline_registry.snapshot()
+    session_running = bool(
+        any(job["session_id"] == resolved_session for job in active_jobs)
+    )
+
+    return {
+        "resolved_session": resolved_session,
+        "module3_output_available": module3_available,
+        "module3_stage": module3_stage,
+        "final_output_ready": final_output_ready,
+        "session_running": session_running,
+        "active_pipelines": active_jobs,
+        "active_count": len(active_jobs),
+        "max_concurrency": MAX_CONCURRENT_PIPELINES,
     }
 
 
 @app.get("/api/input")
-async def get_input() -> JSONResponse:
-    """Get input data from input.json file.
-    
-    Returns:
-        JSONResponse with input data or error message
-    """
-    base_dir = Path(__file__).parent
-    input_file = base_dir / "input.json"
-    
-    if not input_file.exists():
-        logger.warning(f"Input file not found: {input_file}")
-        return JSONResponse(
-            {"error": "Input file not found"},
-            status_code=404
-        )
-    
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            logger.debug("Successfully loaded input data")
-            return data
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in input file: {e}")
-        return JSONResponse(
-            {"error": f"Invalid JSON in input file"},
-            status_code=500
-        )
-    except IOError as e:
-        logger.error(f"File read error for input: {e}")
-        return JSONResponse(
-            {"error": f"File read error: {str(e)}"},
-            status_code=500
-        )
+async def get_input(
+    session_id: str = Query(..., description="Pipeline session identifier")
+) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(session_id)
+    payload = await load_module3_input(resolved_session)
+    return JSONResponse(payload)
+
+
+@app.get("/api/output")
+async def get_output(
+    session_id: str = Query(..., description="Pipeline session identifier")
+) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(session_id)
+    payload = await get_module3_payload(resolved_session)
+    return JSONResponse(payload)
+
 
 @app.get("/module3/output/{category}")
-async def get_module3_output(category: str) -> JSONResponse:
-    """Get perspective output data from module3 final_output directory.
-    
-    Args:
-        category: One of 'leftist', 'rightist', 'common'
-        
-    Returns:
-        JSONResponse with perspective data or error message
-    """
-    base_dir = Path(__file__).parent
-    output_exists = (base_dir / "output.json").exists()
-    clustering_exists = (base_dir / "final_output" / "common.json").exists()
-    
-    if output_exists and not clustering_exists:
+async def get_categorized_output(
+    category: str,
+    session_id: str = Query(..., description="Pipeline session identifier"),
+) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(session_id)
+    payload = await get_module3_payload(resolved_session)
+    final_output = payload.get("final_output", {})
+
+    if category not in {"leftist", "rightist", "common"}:
+        raise HTTPException(status_code=400, detail="Category must be leftist, rightist, or common")
+
+    if category not in final_output:
+        raise HTTPException(status_code=404, detail=f"No data stored for category {category}")
+
+    return JSONResponse(final_output[category])
+
+
+@app.post("/api/run_pipeline_stream")
+async def run_pipeline_stream(request: RunPipelineRequest) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(request.session_id.strip())
+    await fetch_session_for_processing(resolved_session)
+    if await pipeline_registry.is_running(resolved_session):
         return JSONResponse(
             {
-                "error": "Pipeline is still running. Files from previous run are not accessible.",
-                "stage": "processing",
-                "progress": 50
+                "status": "busy",
+                "message": "Pipeline already running for this session",
+                "session_id": resolved_session,
             },
-            status_code=409
+            status_code=409,
         )
-    
-    valid_categories = ["leftist", "rightist", "common"]
-    if category not in valid_categories:
-        return JSONResponse(
-            {"error": f"Invalid category. Must be one of {valid_categories}"},
-            status_code=400
-        )
-    
-    file_path = base_dir / "final_output" / f"{category}.json"
-    
-    if not file_path.exists():
-        logger.warning(f"Output file not found: {file_path}")
-        return JSONResponse(
-            {"error": f"{category} output file not found"},
-            status_code=404
-        )
-    
+    module3_input = await load_module3_input(resolved_session)
+
+    async def runner(sid: str, send_flag: bool) -> None:
+        payload = module3_input if sid == resolved_session else None
+        await execute_pipeline(sid, send_flag, payload)
+
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            logger.debug(f"Successfully loaded {category} output")
-            return data
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in {category} file: {e}")
+        await pipeline_registry.start(resolved_session, request.send_to_module4, runner)
+    except PipelineAlreadyRunningError:
         return JSONResponse(
-            {"error": f"Invalid JSON in {category} file"},
-            status_code=500
+            {
+                "status": "busy",
+                "message": "Pipeline already running for this session",
+                "session_id": resolved_session,
+            },
+            status_code=409,
         )
-    except IOError as e:
-        logger.error(f"File read error for {category}: {e}")
+    except PipelineCapacityExceededError as exc:
         return JSONResponse(
-            {"error": f"File read error: {str(e)}"},
-            status_code=500
+            {
+                "status": "capacity_exceeded",
+                "message": str(exc),
+                "session_id": resolved_session,
+                "max_concurrency": MAX_CONCURRENT_PIPELINES,
+            },
+            status_code=429,
         )
 
-@app.post("/api/send_to_module4")
-async def send_to_module4() -> JSONResponse:
-    """Send perspective files to Module 4 backend for debate analysis.
-    
-    Reads the three perspective files from final_output directory,
-    transforms them to the format Module 4 expects,
-    and POSTs them to Module 4 backend.
-    
-    Returns:
-        JSONResponse with status of data transfer
-    """
-    try:
-        base_dir = Path(__file__).parent
-        final_output_dir = base_dir / "final_output"
-        
-        required_files = ["leftist.json", "rightist.json", "common.json"]
-        for filename in required_files:
-            file_path = final_output_dir / filename
-            if not file_path.exists():
-                logger.error(f"Missing required file: {filename}")
-                return JSONResponse(
-                    {"error": f"Missing required file: {filename}. Run pipeline first."},
-                    status_code=404
-                )
-        
-        perspectives_data = {}
-        for category in required_files:
-            file_path = final_output_dir / category
-            with open(file_path, 'r', encoding='utf-8') as f:
-                perspectives_data[category.replace('.json', '')] = json.load(f)
-        
-        logger.info("Successfully loaded all three perspective files")
-        
-        # Load input.json data as well
-        input_data = None
-        input_file = base_dir / "input.json"
-        if input_file.exists():
-            try:
-                with open(input_file, 'r', encoding='utf-8') as f:
-                    input_data = json.load(f)
-                logger.info(f"Loaded input data: {input_data.get('topic', 'Unknown')}")
-            except Exception as e:
-                logger.warning(f"Failed to load input.json: {e}")
-        
-        # Get Module 4 URL from config
-        if config:
-            module4_url = config.get_module4_url()
-        else:
-            module4_url = "http://127.0.0.1:8004"
-        
-        logger.info(f"Sending data to Module 4 at: {module4_url}")
-        
-        payload = {
-            "common": perspectives_data.get("common"),
-            "leftist": perspectives_data.get("leftist"),
-            "rightist": perspectives_data.get("rightist")
+    return JSONResponse(
+        {
+            "status": "started",
+            "session_id": resolved_session,
+            "forwarded_to_module4": request.send_to_module4,
         }
-        
-        # Add input data if available
-        if input_data:
-            payload["input"] = input_data
-        
-        response = requests.post(
-            f"{module4_url}/upload-perspectives",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            logger.info("Successfully sent perspective data to Module 4 backend")
-            return JSONResponse({
-                "status": "success",
-                "message": "Perspective data sent to Module 4 successfully",
-                "module4_response": response.json()
-            })
-        else:
-            logger.error(f"Module 4 backend returned error: {response.status_code}")
-            return JSONResponse(
-                {
-                    "error": f"Module 4 backend error: {response.status_code}",
-                    "details": response.text
-                },
-                status_code=502
-            )
-            
-    except requests.RequestException as e:
-        logger.error(f"Failed to connect to Module 4 backend: {e}")
-        return JSONResponse(
-            {"error": f"Failed to connect to Module 4 backend: {str(e)}"},
-            status_code=503
-        )
-    except Exception as e:
-        logger.error(f"Error sending data to Module 4: {e}", exc_info=True)
-        return JSONResponse(
-            {"error": f"Internal server error: {str(e)}"},
-            status_code=500
-        )
+    )
+
+
+@app.post("/api/send_to_module4")
+async def send_stored_data_to_module4(request: SendToModule4Request) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(request.session_id)
+    payload = await get_module3_payload(resolved_session)
+    final_output = payload.get("final_output", {})
+
+    if not final_output:
+        raise HTTPException(status_code=404, detail="No final output stored for the requested session.")
+
+    await send_to_module4(resolved_session, final_output)
+    return JSONResponse({"status": "sent", "session_id": resolved_session})
+
+
+@app.post("/api/clear")
+async def clear_local_cache(
+    session_id: str = Query(..., description="Pipeline session identifier"),
+    purge_all: bool = Query(
+        False,
+        description="When true, removes cached artifacts for all sessions (admin use only)",
+    ),
+) -> Dict[str, Any]:
+    module_keys = [MODULE3_RESULT_NAME, MODULE4_INPUT_NAME]
+
+    if purge_all:
+        deleted = await purge_module_results(module_keys)
+        return {
+            "status": "cleared",
+            "scope": "all",
+            "records_removed": deleted,
+            "modules": module_keys,
+        }
+
+    resolved_session = await fetch_session_or_404(session_id)
+    session_record = await get_pipeline_session(resolved_session)
+    deleted = await purge_module_results(module_keys, session_record.id)
+    return {
+        "status": "cleared",
+        "scope": "session",
+        "session_id": resolved_session,
+        "records_removed": deleted,
+        "modules": module_keys,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Server entry point
+# ---------------------------------------------------------------------------
+
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Get port from config, fallback to env variable, then default
-    if config:
-        host = config.get_module3_host()
-        port = config.get_module3_port()
-    else:
-        host = "127.0.0.1"
-        port = int(os.getenv("PIPELINE_PORT", 8002))
-    
-    # When running directly, the lifespan will handle the pipeline execution
-    # Just start the server
-    logger.info(f"Starting Module3 server on {host}:{port}")
-    logger.info("Pipeline will run automatically on server startup via lifespan hook")
-    
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        log_level="info"
-    )
-    
+
+    logger.info("Starting Module 3 server on %s:%s", HOST, PORT)
+
+    if sys.platform.startswith("win"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    async def _serve() -> None:
+        config_obj = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
+        server = uvicorn.Server(config_obj)
+        await server.serve()
+
+    asyncio.run(_serve())

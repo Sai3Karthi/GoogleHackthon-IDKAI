@@ -1,0 +1,38 @@
+[
+    {
+        "color": "red",
+        "bias_x": 0.0,
+        "significance_y": 0.8,
+        "text": "This is a clear case of deceptive advertising designed to lure customers into a system where they will inevitably be charged for hidden fees."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.1905,
+        "significance_y": 0.8,
+        "text": "The fine print is likely where the catch lies; the 'free' offer probably comes with significant limitations or mandatory paid add-ons."
+    },
+    {
+        "color": "yellow",
+        "bias_x": 0.3333,
+        "significance_y": 0.8,
+        "text": "It's possible the 'free domain' is a limited-time offer or a trial period with a subsequent mandatory subscription fee."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.1429,
+        "significance_y": 0.7,
+        "text": "We need stronger regulations to protect consumers from these kinds of digital scams that masquerade as legitimate services."
+    },
+    {
+        "color": "red",
+        "bias_x": 0.0476,
+        "significance_y": 0.6,
+        "text": "The 'free domain' is a bait-and-switch tactic, a classic capitalist scam to extract money through false promises."
+    },
+    {
+        "color": "orange",
+        "bias_x": 0.2381,
+        "significance_y": 0.6,
+        "text": "It's crucial to understand what's actually included in the 'free domain' offer and what the long-term costs will be."
+    }
+]

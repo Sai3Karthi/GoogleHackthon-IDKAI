@@ -1,82 +1,153 @@
-#!/usr/bin/env python3
-import json
-import re
-import sys
+"""Module 2 service for classification and significance scoring."""
+
 import os
-from pathlib import Path
+import sys
+
+if sys.platform.startswith("win"):
+    os.environ.setdefault("PYTHONASYNCIO_USE_SELECTOR", "1")
+
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
-from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT_DIR))
+
+try:
+    from utils.env_loader import load_env_file
+
+    env_path = ROOT_DIR / ".env"
+    if load_env_file(env_path):
+        logger.info("Environment variables loaded from %s", env_path)
+except (ImportError, ValueError):
+    try:
+        from dotenv import load_dotenv
+
+        env_path = ROOT_DIR / ".env"
+        load_dotenv(env_path)
+        logger.info("Environment variables loaded via python-dotenv from %s", env_path)
+    except ImportError:
+        logger.info("Using system environment variables (python-dotenv not available)")
+
+try:
+    from config_loader import get_config
+
+    config = get_config()
+    logger.info("Configuration loaded successfully")
+except Exception as config_error:  # pylint: disable=broad-except
+    logger.warning("Could not load config: %s. Using environment defaults.", config_error)
+    config = None
+
+from database import (  # type: ignore  # added after sys.path update
+    initialize_database_schema,
+    get_async_session,
+    get_module_result,
+    get_pipeline_session,
+    save_module_result,
+    update_session_status,
+    ModuleResultNotFoundError,
+    PipelineSession,
+    SessionNotFoundError,
+)
+
 from Modules.Classifier.classifier import FakeNewsDetector
-from Modules.SignificanceScore.scoreProvider import get_triage_score
 from Modules.Summarizer.summarizer import ComprehensiveSummarizer
 
-# Load environment variables from root .env file
-root_dir = Path(__file__).resolve().parents[2]
-env_path = root_dir / ".env"
-load_dotenv(dotenv_path=env_path)
+if config:
+    HOST = config.get_module2_host()
+    PORT = config.get_module2_port()
+    frontend_port = config.get_frontend_port()
+    frontend_url = config.get_frontend_url()
+else:
+    HOST = os.getenv("HOST", "127.0.0.1")
+    PORT = int(os.getenv("MODULE2_PORT", 8002))
+    frontend_port = int(os.getenv("FRONTEND_PORT", 3000))
+    frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{frontend_port}")
 
-# Get configuration from environment variables
+APP_TITLE = "Module 2: Information Classification"
+APP_DESCRIPTION = "Classify information and assign significance scores based on Module 1 analysis"
+APP_VERSION = "1.0.0"
+
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
-HOST = os.getenv("HOST", "127.0.0.1")
-PORT = int(os.getenv("MODULE2_PORT", 8002))
-APP_TITLE = os.getenv("APP_TITLE", "Module 2: Information Classification")
-APP_DESCRIPTION = os.getenv("APP_DESCRIPTION", "Classify information and assign significance scores based on Module 1 analysis")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+MODEL_NAME = os.getenv("MODULE2_MODEL", os.getenv("MODEL_NAME", "gemini-2.5-flash"))
 
-# Validate required environment variables
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is required in root .env")
 
-# File paths
-MODULE1_INPUT_PATH = root_dir / "module1" / "backend" / "input.json"
-MODULE1_OUTPUT_PATH = root_dir / "module1" / "backend" / "output.json"
-MODULE2_OUTPUT_PATH = Path(__file__).parent / "output.json"
-MODULE3_INPUT_PATH = root_dir / "module3" / "backend" / "input.json"
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# FastAPI app instance
+port_override = os.getenv("PORT")
+if port_override:
+    PORT = int(port_override)
+    HOST = "0.0.0.0"
+
+allowed_origins: List[str] = []
+if config:
+    allowed_origins.append(config.get_frontend_url())
+    frontend_port = config.get_frontend_port()
+    allowed_origins.extend(
+        [
+            f"http://localhost:{frontend_port}",
+            f"http://127.0.0.1:{frontend_port}",
+        ]
+    )
+else:
+    allowed_origins = [
+        frontend_url,
+        f"http://localhost:{frontend_port}",
+        f"http://127.0.0.1:{frontend_port}",
+    ]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Module2 server starting up...")
+    try:
+        initialize_database_schema()
+        logger.info("Database schema ensured")
+    except Exception as db_error:  # pylint: disable=broad-except
+        logger.error("Failed to initialize database schema: %s", db_error)
+        raise
+    yield
+    logger.info("Module2 server shutting down...")
+
+
 app = FastAPI(
     title=APP_TITLE,
     description=APP_DESCRIPTION,
-    version=APP_VERSION
+    version=APP_VERSION,
+    lifespan=lifespan,
 )
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize components globally with environment variables
 classifier = FakeNewsDetector(API_KEY, MODEL_NAME)
 summarizer = ComprehensiveSummarizer(API_KEY, MODEL_NAME)
 
-print(f"Module 2 initialized with API key: {API_KEY[:20]}...")
-print(f"Using model: {MODEL_NAME}")
-print(f"Port: {PORT}")
+logger.info("Module 2 initialized with model %s", MODEL_NAME)
 
 
 # Pydantic models for request/response
-class Module1Output(BaseModel):
-    input_type: str
-    risk_level: str
-    confidence: float
-    threats: List[str]
-    recommendation: str
-    ai_powered: bool
-    analysis_details: Optional[Dict[str, Any]] = None
-    skip_to_final: Optional[bool] = False
-    skip_reason: Optional[str] = None
-    timestamp: str
-
-class ClassificationResult(BaseModel):
+class ClassificationBreakdown(BaseModel):
     person: float
     organization: float
     social: float
@@ -84,7 +155,7 @@ class ClassificationResult(BaseModel):
     stem: float
 
 class DetailedAnalysis(BaseModel):
-    classification: ClassificationResult
+    classification: ClassificationBreakdown
     classification_reasoning: str
     classification_confidence: float
     significance_score: int
@@ -100,11 +171,18 @@ class Module2Output(BaseModel):
     module1_threats: List[str]
     timestamp: str
 
+
 class Module3Input(BaseModel):
     topic: str
     text: str
     significance_score: float
 
+
+class ProcessRequest(BaseModel):
+    session_id: str = Field(
+        ...,
+        description="Pipeline session identifier generated by Module 1",
+    )
 
 def calculate_significance_score(confidence: float, risk_level: str, threats: List[str]) -> tuple[int, str]:
     """
@@ -151,262 +229,340 @@ def calculate_significance_score(confidence: float, risk_level: str, threats: Li
     return min(100, max(0, score)), explanation
 
 
-# API Endpoints
+# Helper utilities
+
+
+def determine_debate_priority(score: int) -> str:
+    if score >= 80:
+        return "critical"
+    if score >= 60:
+        return "high"
+    if score >= 30:
+        return "medium"
+    return "low"
+
+
+async def fetch_session_or_404(session_id: str) -> PipelineSession:
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    try:
+        return await get_pipeline_session(session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found") from exc
+
+
+async def fetch_session_for_processing(session_id: str) -> PipelineSession:
+    session_record = await fetch_session_or_404(session_id)
+    if session_record.status not in {"module1_completed", "module2_processing"}:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Session {session_id} is in status '{session_record.status}' "
+                "and cannot be processed by Module 2."
+            ),
+        )
+    return session_record
+
+
+async def load_module1_output(session_id: str) -> Dict[str, Any]:
+    try:
+        module1_result = await get_module_result(session_id, "module1")
+    except ModuleResultNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail="Module 1 output not found for the requested session."
+        ) from exc
+    return module1_result.payload or {}
+
+
+def extract_original_text(session_record: PipelineSession, module1_payload: Dict[str, Any]) -> str:
+    metadata = session_record.input_metadata or {}
+    analysis_details = module1_payload.get("analysis_details")
+    if not isinstance(analysis_details, dict):
+        analysis_details = {}
+
+    candidates = [
+        metadata.get("text"),
+        metadata.get("content"),
+        metadata.get("input_text"),
+        module1_payload.get("scraped_text"),
+        module1_payload.get("extracted_text"),
+        module1_payload.get("ai_reasoning"),
+        analysis_details.get("scraped_text"),
+        analysis_details.get("content"),
+        analysis_details.get("body"),
+    ]
+
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    url_candidate = metadata.get("url") or module1_payload.get("url")
+    if isinstance(url_candidate, str) and url_candidate.strip():
+        return url_candidate.strip()
+
+    raise HTTPException(
+        status_code=400,
+        detail="No text content available from Module 1 results for classification.",
+    )
+
+
+def prepare_module3_input(
+    original_text: str,
+    summary_text: str,
+    significance_score: int,
+) -> Module3Input:
+    topic = summary_text if len(summary_text) <= 200 else f"{summary_text[:200]}..."
+    return Module3Input(
+        topic=topic,
+        text=original_text,
+        significance_score=significance_score / 100.0,
+    )
+
+
+def build_detailed_analysis(
+    classification_result,
+    significance_score: int,
+    significance_explanation: str,
+    summary_text: str,
+) -> DetailedAnalysis:
+    breakdown = ClassificationBreakdown(
+        person=classification_result.person,
+        organization=classification_result.organization,
+        social=classification_result.social,
+        critical=classification_result.critical,
+        stem=classification_result.stem,
+    )
+
+    requires_debate = significance_score >= 50
+    return DetailedAnalysis(
+        classification=breakdown,
+        classification_reasoning=classification_result.reasoning,
+        classification_confidence=classification_result.confidence_score,
+        significance_score=significance_score,
+        significance_explanation=significance_explanation,
+        comprehensive_summary=summary_text,
+        requires_debate=requires_debate,
+        debate_priority=determine_debate_priority(significance_score),
+    )
+
+
+def build_module2_output(
+    detailed_analysis: DetailedAnalysis,
+    confidence: float,
+    risk_level: str,
+    threats: List[str],
+) -> Module2Output:
+    return Module2Output(
+        detailed_analysis=detailed_analysis,
+        module1_confidence=confidence,
+        module1_risk_level=risk_level,
+        module1_threats=threats,
+        timestamp=datetime.now().isoformat(),
+    )
+
 
 @app.get("/")
-async def root():
-    """Root endpoint with API information"""
+async def root() -> Dict[str, Any]:
     return {
         "message": APP_TITLE,
         "version": APP_VERSION,
+        "requires_session_id": True,
         "endpoints": {
-            "POST /api/process": "Process Module 1 output and generate classification",
-            "GET /api/input": "Get Module 1 input data",
-            "GET /api/output": "Get Module 2 output data",
-            "GET /api/health": "Health check endpoint"
-        }
+            "POST /api/process": "Process Module 1 output by session",
+            "GET /api/input": "Retrieve Module 1 output for a session",
+            "GET /api/output": "Retrieve Module 2 output for a session",
+            "GET /api/status": "Inspect module state and data availability",
+            "GET /api/health": "Health check",
+        },
     }
 
 
 @app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
+async def health_check() -> Dict[str, Any]:
+    db_status = "reachable"
+    try:
+        async with get_async_session() as session:
+            await session.execute(select(1))
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Database health check failed: %s", exc)
+        db_status = f"error: {exc}"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "reachable" else "degraded",
         "message": "Module 2 Classification Service",
         "model": MODEL_NAME,
-        "port": PORT
+        "database": db_status,
+        "port": PORT,
     }
 
 
 @app.get("/api/input")
-async def get_module1_output():
-    """
-    Get Module 1's output data (which becomes Module 2's input)
-    """
-    try:
-        if not MODULE1_OUTPUT_PATH.exists():
-            raise HTTPException(status_code=404, detail="Module 1 output not found. Please run Module 1 first.")
-        
-        with open(MODULE1_OUTPUT_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        return data
-        
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON in Module 1 output: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read Module 1 output: {str(e)}")
+async def get_module1_output(
+    session_id: str = Query(..., description="Pipeline session identifier from Module 1"),
+) -> JSONResponse:
+    session_record = await fetch_session_or_404(session_id)
+    module1_payload = await load_module1_output(str(session_record.id))
+    return JSONResponse(module1_payload)
 
 
 @app.get("/api/output")
-async def get_module2_output():
-    """
-    Get Module 2's output data
-    """
+async def get_module2_output(
+    session_id: str = Query(..., description="Pipeline session identifier from Module 1"),
+) -> JSONResponse:
+    session_record = await fetch_session_or_404(session_id)
     try:
-        if not MODULE2_OUTPUT_PATH.exists():
-            raise HTTPException(status_code=404, detail="Module 2 output not found. Please run /api/process first.")
-        
-        with open(MODULE2_OUTPUT_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        return data
-        
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON in Module 2 output: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read Module 2 output: {str(e)}")
+        module2_result = await get_module_result(session_record.id, "module2")
+    except ModuleResultNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail="Module 2 output not available for the requested session."
+        ) from exc
+
+    return JSONResponse(module2_result.payload)
+
+
+@app.get("/api/status")
+async def get_status(
+    session_id: str = Query(..., description="Pipeline session identifier from Module 1"),
+) -> Dict[str, Any]:
+    session_record = await fetch_session_or_404(session_id)
+
+    module1_available = False
+    module2_available = False
+    try:
+        await get_module_result(session_record.id, "module1")
+        module1_available = True
+    except ModuleResultNotFoundError:
+        module1_available = False
+    try:
+        await get_module_result(session_record.id, "module2")
+        module2_available = True
+    except ModuleResultNotFoundError:
+        module2_available = False
+
+    return {
+        "service": "module2",
+        "status": "ready" if module1_available else "awaiting_module1",
+        "session_available": True,
+        "module1_output_available": module1_available,
+        "module2_output_available": module2_available,
+    }
 
 
 @app.post("/api/process")
-async def process_module1_output():
-    """
-    Process Module 1's output:
-    1. Clear old Module 2 output
-    2. Read Module 1 output and input
-    3. Classify the information
-    4. Calculate significance score (inverse of confidence)
-    5. Generate comprehensive summary
-    6. Save detailed output to output.json
-    7. Save simplified data to Module 3's input.json
-    
-    Returns:
-        Module2Output with detailed analysis
-        
-    Raises:
-        HTTPException: If processing fails
-    """
+async def process_module1_output(request: ProcessRequest) -> Module2Output:
+    session_record = await fetch_session_for_processing(request.session_id)
+    session_id_str = str(session_record.id)
+
+    logger.info("Processing session %s", session_id_str)
+    await update_session_status(session_record.id, "module2_processing")
+
     try:
-        # Clear old output files first
-        if MODULE2_OUTPUT_PATH.exists():
-            print(f"Clearing old Module 2 output: {MODULE2_OUTPUT_PATH}")
-            MODULE2_OUTPUT_PATH.unlink()
-        
-        if MODULE3_INPUT_PATH.exists():
-            print(f"Clearing old Module 3 input: {MODULE3_INPUT_PATH}")
-            MODULE3_INPUT_PATH.unlink()
-        
-        # Read Module 1 output
-        if not MODULE1_OUTPUT_PATH.exists():
-            raise HTTPException(status_code=404, detail="Module 1 output not found. Please run Module 1 analysis first.")
-        
-        with open(MODULE1_OUTPUT_PATH, 'r', encoding='utf-8') as f:
-            module1_output = json.load(f)
-        
-        # Read Module 1 input to get original text
-        if not MODULE1_INPUT_PATH.exists():
-            raise HTTPException(status_code=404, detail="Module 1 input not found.")
-        
-        with open(MODULE1_INPUT_PATH, 'r', encoding='utf-8') as f:
-            module1_input = json.load(f)
-        
-        # Try multiple keys for text content
-        original_text = (
-            module1_input.get('text') or 
-            module1_input.get('url') or 
-            module1_input.get('content') or
-            module1_input.get('scraped_text') or
-            ''
-        )
-        
-        if not original_text or not original_text.strip():
-            # Try to get text from module1_output if available
-            original_text = (
-                module1_output.get('scraped_text') or
-                module1_output.get('extracted_text') or
-                module1_output.get('ai_reasoning') or
-                ''
-            )
-        
-        if not original_text or not original_text.strip():
-            raise HTTPException(
-                status_code=400, 
-                detail="No text content found in Module 1 input or output. Please provide valid text content for analysis."
-            )
-        
-        # Extract Module 1 data
-        confidence = module1_output.get('confidence', 0.5)
-        risk_level = module1_output.get('risk_level', 'unknown')
-        threats = module1_output.get('threats', [])
-        
-        print(f"[Module2] Processing text ({len(original_text)} chars)")
-        print(f"[Module2] Module 1 confidence: {confidence}, risk: {risk_level}, threats: {len(threats)}")
-        
-        # Classify the information using AI
-        print(f"[Module2] Classifying: {original_text[:100]}...")
+        module1_payload = await load_module1_output(session_id_str)
+        original_text = extract_original_text(session_record, module1_payload)
+
+        confidence = float(module1_payload.get("confidence", 0.5))
+        risk_level = str(module1_payload.get("risk_level", "unknown"))
+        threats = module1_payload.get("threats") or []
+
+        logger.info("Classifying content (length=%s)", len(original_text))
         try:
-            classification_result = classifier.classify(original_text)
-        except Exception as e:
-            error_msg = str(e)
-            if "403" in error_msg or "Permission" in error_msg or "leaked" in error_msg:
+            classification_result = await asyncio.to_thread(classifier.classify, original_text)
+        except Exception as exc:  # pylint: disable=broad-except
+            error_msg = str(exc)
+            if any(token in error_msg for token in ("403", "Permission", "leaked")):
                 raise HTTPException(
                     status_code=403,
-                    detail="API Key Error: Your Google API key was reported as leaked and has been disabled. "
-                           "Please get a new API key from https://aistudio.google.com/apikey and update the "
-                           "GEMINI_API_KEY in your .env file. See API_KEY_SETUP.md for detailed instructions."
-                )
-            raise HTTPException(status_code=500, detail=f"Classification failed: {error_msg}")
-        
+                    detail=(
+                        "API Key Error: Your Google API key was reported as leaked and has been disabled. "
+                        "Please generate a new key and update GEMINI_API_KEY."
+                    ),
+                ) from exc
+            raise HTTPException(status_code=500, detail=f"Classification failed: {error_msg}") from exc
+
         if not classification_result:
-            raise HTTPException(status_code=500, detail="Classification failed")
-        
-        # Calculate significance score (inverse of confidence)
+            raise HTTPException(status_code=500, detail="Classification failed to produce a result")
+
         significance_score, significance_explanation = calculate_significance_score(
             confidence, risk_level, threats
         )
-        
-        # Generate comprehensive summary
-        print("[Module2] Generating summary...")
+
+        logger.info("Generating summary for session %s", session_id_str)
         try:
-            summary_result = summarizer.summarize(original_text)
-        except Exception as e:
-            error_msg = str(e)
-            if "403" in error_msg or "Permission" in error_msg or "leaked" in error_msg:
+            summary_result = await asyncio.to_thread(summarizer.summarize, original_text)
+        except Exception as exc:  # pylint: disable=broad-except
+            error_msg = str(exc)
+            if any(token in error_msg for token in ("403", "Permission", "leaked")):
                 raise HTTPException(
                     status_code=403,
-                    detail="API Key Error: Your Google API key was reported as leaked and has been disabled. "
-                           "Please get a new API key from https://aistudio.google.com/apikey and update the "
-                           "GEMINI_API_KEY in your .env file. See API_KEY_SETUP.md for detailed instructions."
-                )
-            raise HTTPException(status_code=500, detail=f"Summarization failed: {error_msg}")
-        
+                    detail=(
+                        "API Key Error: Your Google API key was reported as leaked and has been disabled. "
+                        "Please generate a new key and update GEMINI_API_KEY."
+                    ),
+                ) from exc
+            raise HTTPException(status_code=500, detail=f"Summarization failed: {error_msg}") from exc
+
         if not summary_result:
-            raise HTTPException(status_code=500, detail="Summarization failed")
-        
-        # Determine if debate is required (significance > 50)
-        requires_debate = significance_score >= 50
-        
-        if significance_score >= 80:
-            debate_priority = "critical"
-        elif significance_score >= 60:
-            debate_priority = "high"
-        elif significance_score >= 30:
-            debate_priority = "medium"
-        else:
-            debate_priority = "low"
-        
-        # Create detailed analysis
-        detailed_analysis = DetailedAnalysis(
-            classification=ClassificationResult(
-                person=classification_result.person,
-                organization=classification_result.organization,
-                social=classification_result.social,
-                critical=classification_result.critical,
-                stem=classification_result.stem
-            ),
-            classification_reasoning=classification_result.reasoning,
-            classification_confidence=classification_result.confidence_score,
-            significance_score=significance_score,
-            significance_explanation=significance_explanation,
-            comprehensive_summary=summary_result.comprehensive_summary,
-            requires_debate=requires_debate,
-            debate_priority=debate_priority
+            raise HTTPException(status_code=500, detail="Summarization failed to produce a result")
+
+        detailed_analysis = build_detailed_analysis(
+            classification_result,
+            significance_score,
+            significance_explanation,
+            summary_result.comprehensive_summary,
         )
-        
-        # Create Module 2 output
-        module2_output = Module2Output(
-            detailed_analysis=detailed_analysis,
-            module1_confidence=confidence,
-            module1_risk_level=risk_level,
-            module1_threats=threats,
-            timestamp=datetime.now().isoformat()
+
+        module2_output = build_module2_output(
+            detailed_analysis,
+            confidence,
+            risk_level,
+            threats,
         )
-        
-        # Save Module 2 output (detailed)
-        MODULE2_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(MODULE2_OUTPUT_PATH, 'w', encoding='utf-8') as f:
-            json.dump(module2_output.dict(), f, indent=2, ensure_ascii=False)
-        
-        # Save Module 3 input (simplified - matching Module 3's expected format)
-        # Use comprehensive summary as topic, original text as text, significance_score as float (0-1 normalized)
-        module3_input = Module3Input(
-            topic=summary_result.comprehensive_summary[:200] + "..." if len(summary_result.comprehensive_summary) > 200 else summary_result.comprehensive_summary,
-            text=original_text,
-            significance_score=significance_score / 100.0  # Normalize to 0-1 range
+
+        module3_input = prepare_module3_input(
+            original_text,
+            summary_result.comprehensive_summary,
+            significance_score,
         )
-        
-        MODULE3_INPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(MODULE3_INPUT_PATH, 'w', encoding='utf-8') as f:
-            json.dump(module3_input.dict(), f, indent=2, ensure_ascii=False)
-        
-        print(f"[Module2] Processing complete. Significance score: {significance_score}/100 ({significance_score/100.0:.2f})")
-        print(f"[Module2] Debate required: {requires_debate} (Priority: {debate_priority})")
-        print(f"[Module2] Module 3 input saved to: {MODULE3_INPUT_PATH}")
-        print(f"[Module2] Module 2 output saved to: {MODULE2_OUTPUT_PATH}")
-        
+
+        await save_module_result(
+            session_id=session_record.id,
+            module_name="module2",
+            payload=module2_output.model_dump(),
+            status="completed",
+        )
+
+        await save_module_result(
+            session_id=session_record.id,
+            module_name="module3_input",
+            payload=module3_input.model_dump(),
+            status="ready",
+        )
+
+        await update_session_status(session_record.id, "module2_completed")
+        logger.info(
+            "Module 2 processing complete for session %s (significance=%s)",
+            session_id_str,
+            significance_score,
+        )
         return module2_output
-        
-    except HTTPException as he:
-        print(f"[Module2 ERROR] HTTP {he.status_code}: {he.detail}")
+
+    except HTTPException:
+        await update_session_status(session_record.id, "module1_completed")
         raise
-    except Exception as e:
-        import traceback
-        print(f"[Module2 ERROR] Unexpected error: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+    except Exception as exc:  # pylint: disable=broad-except
+        await update_session_status(session_record.id, "module1_completed")
+        logger.exception("Module 2 processing failed for session %s", session_id_str)
+        raise HTTPException(status_code=500, detail=f"Processing failed: {exc}") from exc
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=HOST, port=PORT)
+
+    logger.info("Starting Module 2 server on %s:%s", HOST, PORT)
+
+    async def _serve() -> None:
+        config_obj = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
+        server = uvicorn.Server(config_obj)
+        await server.serve()
+
+    asyncio.run(_serve())

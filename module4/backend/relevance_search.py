@@ -7,7 +7,7 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 import google.generativeai as genai
 from selenium import webdriver
@@ -33,15 +33,29 @@ except ImportError:
 
 
 class RelevanceSearchSystem:
-    def __init__(self, config_path: str = "config.json", data_dir: str = "data"):
+    def __init__(
+        self,
+        config_path: str = "config.json",
+        data_dir: str = "data",
+        *,
+        perspective_payload: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        topic: Optional[str] = None,
+        context_text: Optional[str] = None,
+    ):
         """
         Initialize the relevance search system
         
         Args:
             config_path: Path to configuration file
             data_dir: Directory containing input perspective files
+            perspective_payload: Optional in-memory payload mapping category to perspective list
+            topic: Optional topic text when working with in-memory payloads
+            context_text: Optional raw user input for additional context
         """
         self.data_dir = Path(data_dir)
+        self.perspective_payload = perspective_payload
+        self.topic = topic or ""
+        self.context_text = context_text or ""
         config_file = Path(__file__).parent / config_path
         
         with open(config_file, 'r', encoding='utf-8') as f:
@@ -83,19 +97,18 @@ class RelevanceSearchSystem:
         except Exception as e:
             print(f"Warning: Could not initialize Gemini model: {e}")
         
-        # Load input data for topic context
-        self.topic = ""
-        self.context_text = ""
-        input_file = self.data_dir / "input.json"
-        if input_file.exists():
-            try:
-                with open(input_file, 'r', encoding='utf-8') as f:
-                    input_data = json.load(f)
-                    self.topic = input_data.get('topic', '')
-                    self.context_text = input_data.get('text', '')
-                    print(f"Topic loaded: {self.topic}")
-            except Exception as e:
-                print(f"Warning: Could not load input.json: {e}")
+        # Load input data for topic context when working from disk
+        if self.perspective_payload is None:
+            input_file = self.data_dir / "input.json"
+            if input_file.exists() and not self.topic:
+                try:
+                    with open(input_file, 'r', encoding='utf-8') as f:
+                        input_data = json.load(f)
+                        self.topic = input_data.get('topic', self.topic)
+                        self.context_text = input_data.get('text', self.context_text)
+                        print(f"Topic loaded: {self.topic}")
+                except Exception as e:
+                    print(f"Warning: Could not load input.json: {e}")
         
         # Extract keywords from topic
         self.topic_keywords = self._extract_keywords_from_topic()
@@ -488,78 +501,108 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
         except Exception as e:
             return f"Error extracting content: {str(e)[:100]}"
     
+    def _normalize_items(self, data: Any) -> List[Dict[str, Any]]:
+        if isinstance(data, dict):
+            if 'items' in data and isinstance(data['items'], list):
+                return data['items']
+            return []
+        if isinstance(data, list):
+            return data
+        return []
+
+    def _process_items(
+        self,
+        category: str,
+        raw_items: List[Dict[str, Any]],
+        *,
+        source_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        items = raw_items or []
+        results = []
+
+        for idx, item in enumerate(items, start=1):
+            text = item.get('text', '')
+            if not text:
+                continue
+
+            print(f"\nProcessing {idx}/{len(items)}: {text[:60]}...")
+
+            rephrased_text = self.rephrase_with_topic_context(text)
+            print(f"  Rephrased: {rephrased_text[:60]}...")
+            time.sleep(self.delay)
+
+            search_results = self.search_google(text, rephrased_text)
+            print(f"  Found {len(search_results)} search results")
+            time.sleep(self.delay)
+
+            relevant_links = []
+
+            for link in search_results:
+                relevance_check = self.check_relevance(link, text)
+
+                if relevance_check['relevant'] and relevance_check['confidence'] >= self.relevance_threshold:
+                    print(
+                        f"    PASSED: {link['title'][:50]}... (conf: {relevance_check['confidence']:.2f} >= {self.relevance_threshold})"
+                    )
+
+                    trust_check = self.check_trust_score(link)
+                    print(f"      Trust: {trust_check['trust_score']:.2f} ({trust_check['source_type']})")
+
+                    extracted_content = self.extract_content_from_url(link['link'])
+                    print(f"      Extracted {len(extracted_content)} chars")
+
+                    relevant_links.append(
+                        {
+                            'title': link['title'],
+                            'link': link['link'],
+                            'snippet': link['snippet'],
+                            'trust_score': trust_check['trust_score'],
+                            'source_type': trust_check['source_type'],
+                            'extracted_content': extracted_content,
+                        }
+                    )
+                    print(f"      ADDED to relevant_links (now have {len(relevant_links)} links)")
+                else:
+                    reason = (
+                        f"relevant={relevance_check.get('relevant', 'N/A')}, "
+                        f"conf={relevance_check.get('confidence', 0):.2f} < {self.relevance_threshold}"
+                    )
+                    print(f"    REJECTED: {link['title'][:50]}... ({reason})")
+
+                time.sleep(self.delay)
+
+            results.append(
+                {
+                    'text': item.get('text', ''),
+                    'bias_x': item.get('bias_x', 0.5),
+                    'significance_y': item.get('significance_y', 0.5),
+                    'combined_score': round(item.get('bias_x', 0.5) * item.get('significance_y', 0.5), 4),
+                    'color': item.get('color', ''),
+                    'relevant_links': relevant_links,
+                }
+            )
+
+        return {
+            'category': category,
+            'source_file': source_name or f'{category}.json',
+            'processed_at': datetime.now().isoformat(),
+            'total_items': len(items),
+            'items': results,
+        }
+
     def process_json_file(self, file_path: Path) -> Dict[str, Any]:
         """Process a single perspective JSON file and enrich with web content"""
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
-        results = []
-        
-        for idx, item in enumerate(data):
-            text = item.get('text', '')
-            if not text:
-                continue
-            
-            print(f"\nProcessing {idx + 1}/{len(data)}: {text[:60]}...")
-            
-            rephrased_text = self.rephrase_with_topic_context(text)
-            print(f"  Rephrased: {rephrased_text[:60]}...")
-            time.sleep(self.delay)
-            
-            search_results = self.search_google(text, rephrased_text)
-            print(f"  Found {len(search_results)} search results")
-            time.sleep(self.delay)
-            
-            relevant_links = []
-            
-            for link in search_results:
-                relevance_check = self.check_relevance(link, text)
-                
-                if relevance_check['relevant'] and relevance_check['confidence'] >= self.relevance_threshold:
-                    print(f"    PASSED: {link['title'][:50]}... (conf: {relevance_check['confidence']:.2f} >= {self.relevance_threshold})")
-                    
-                    trust_check = self.check_trust_score(link)
-                    print(f"      Trust: {trust_check['trust_score']:.2f} ({trust_check['source_type']})")
-                    
-                    extracted_content = self.extract_content_from_url(link['link'])
-                    print(f"      Extracted {len(extracted_content)} chars")
-                    
-                    relevant_links.append({
-                        'title': link['title'],
-                        'link': link['link'],
-                        'snippet': link['snippet'],
-                        'trust_score': trust_check['trust_score'],
-                        'source_type': trust_check['source_type'],
-                        'extracted_content': extracted_content
-                    })
-                    print(f"      ADDED to relevant_links (now have {len(relevant_links)} links)")
-                else:
-                    reason = f"relevant={relevance_check.get('relevant', 'N/A')}, conf={relevance_check.get('confidence', 0):.2f} < {self.relevance_threshold}"
-                    print(f"    REJECTED: {link['title'][:50]}... ({reason})")
-                
-                time.sleep(self.delay)
-            
-            results.append({
-                'text': item.get('text', ''),
-                'bias_x': item.get('bias_x', 0.5),
-                'significance_y': item.get('significance_y', 0.5),
-                'combined_score': round(item.get('bias_x', 0.5) * item.get('significance_y', 0.5), 4),
-                'color': item.get('color', ''),
-                'relevant_links': relevant_links
-            })
-        
-        return {
-            'source_file': file_path.name,
-            'processed_at': datetime.now().isoformat(),
-            'total_items': len(data),
-            'items': results
-        }
-    
+
+        normalized_items = self._normalize_items(data)
+        return self._process_items(file_path.stem, normalized_items, source_name=file_path.name)
+
     def process_all_files(self) -> Dict[str, Any]:
-        """Process all perspective files (leftist, rightist, common) and create enriched versions"""
-        json_files = ['leftist.json', 'rightist.json', 'common.json']
-        all_results = {}
-        
+        """Process perspective data from disk or in-memory payloads"""
+        categories = ['leftist', 'rightist', 'common']
+        all_results: Dict[str, Any] = {}
+
         print("=" * 60)
         print("MODULE 4 RELEVANCE SEARCH SYSTEM")
         print("=" * 60)
@@ -567,34 +610,49 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
         print(f"Links per text: {self.links_per_text}")
         print(f"Relevance threshold: {self.relevance_threshold}")
         print("=" * 60)
-        
+
+        if self.perspective_payload is not None:
+            for category in categories:
+                items = self.perspective_payload.get(category, []) if self.perspective_payload else []
+                if not items:
+                    print(f"\nWarning: No {category} perspectives supplied, skipping...")
+                    continue
+
+                print(f"\n\nProcessing in-memory payload for {category}...")
+                print("-" * 60)
+                all_results[category] = self._process_items(category, items, source_name=f"{category}.payload")
+
+            self._print_summary(all_results)
+            return all_results
+
+        json_files = [f'{category}.json' for category in categories]
+
         for json_file in json_files:
             file_path = self.data_dir / json_file
             if not file_path.exists():
                 print(f"\nWarning: {json_file} not found, skipping...")
                 continue
-            
+
             print(f"\n\nProcessing {json_file}...")
             print("-" * 60)
-            
-            results = self.process_json_file(file_path)
-            
-            # Save enriched file
+
+            result = self.process_json_file(file_path)
+
             output_file = self.data_dir / f"relevant_{json_file}"
             output_data = {
                 'topic': self.topic,
                 'source_file': json_file,
-                'processed_at': results['processed_at'],
-                'total_items': results['total_items'],
-                'items': results['items']
+                'processed_at': result['processed_at'],
+                'total_items': result['total_items'],
+                'items': result['items'],
             }
-            
+
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
-            
+
             print(f"\nSaved: {output_file.name}")
-            all_results[json_file] = results
-        
+            all_results[file_path.stem] = result
+
         self._print_summary(all_results)
         return all_results
     
@@ -603,18 +661,25 @@ Source types: News Organization, Government, Academic, Social Media, Blog, Forum
         print("\n" + "=" * 60)
         print("PROCESSING SUMMARY")
         print("=" * 60)
-        
-        total_relevant = 0
-        for json_file, file_data in all_results.items():
-            relevant_count = sum(len(item['relevant_links']) for item in file_data['items'])
-            total_relevant += relevant_count
-            
-            print(f"\n{json_file}:")
-            print(f"  Total items: {file_data['total_items']}")
-            print(f"  Items with relevant links: {relevant_count}")
-            print(f"  Output: relevant_{json_file}")
-        
-        print(f"\nTOTAL RELEVANT LINKS FOUND: {total_relevant}")
+
+        total_links = 0
+        for key, file_data in all_results.items():
+            items = file_data.get('items', [])
+            link_count = sum(len(item.get('relevant_links', [])) for item in items)
+            items_with_links = sum(1 for item in items if item.get('relevant_links'))
+            total_links += link_count
+
+            label = file_data.get('source_file', key)
+            print(f"\n{label}:")
+            print(f"  Total items: {file_data.get('total_items', len(items))}")
+            print(f"  Items with relevant links: {items_with_links}")
+            print(f"  Relevant links found: {link_count}")
+
+            source_file = file_data.get('source_file')
+            if source_file:
+                print(f"  Output: relevant_{Path(source_file).name}")
+
+        print(f"\nTOTAL RELEVANT LINKS FOUND: {total_links}")
         print("=" * 60)
     
     def cleanup(self):

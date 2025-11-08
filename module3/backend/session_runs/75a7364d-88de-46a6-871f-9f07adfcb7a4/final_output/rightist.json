@@ -1,0 +1,56 @@
+[
+    {
+        "color": "blue",
+        "bias_x": 0.7073,
+        "significance_y": 0.9,
+        "text": "This is a classic phishing tactic disguised as a legitimate promotion, designed to lure unsuspecting users into a trap."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.8293,
+        "significance_y": 0.9,
+        "text": "Anyone who clicks on a 'free giveaway' link without verifying the source is playing with fire and risking serious consequences."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9756,
+        "significance_y": 0.9,
+        "text": "This is not just a suggestion of a promotion; it is a direct invitation to a digital ambush."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.5854,
+        "significance_y": 0.8,
+        "text": "The use of 'example.com' is a classic, though somewhat transparent, sign of a potentially fake offer."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6341,
+        "significance_y": 0.8,
+        "text": "This is a textbook example of how online scams are often constructed to appear legitimate at first glance."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7317,
+        "significance_y": 0.8,
+        "text": "The use of a placeholder domain like 'example.com' is a common tactic to avoid legal scrutiny while still appearing to be a real offer."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.878,
+        "significance_y": 0.8,
+        "text": "The use of a generic domain like 'example.com' is a common tactic to make the offer seem less specific and therefore more universally appealing to victims."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.6829,
+        "significance_y": 0.7,
+        "text": "The inclusion of a placeholder URL is a weak attempt at sophistication, easily identifiable by experienced internet users."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7805,
+        "significance_y": 0.7,
+        "text": "The inclusion of 'free giveaway' is a powerful psychological trigger designed to bypass rational thought and encourage impulsive clicks."
+    }
+]

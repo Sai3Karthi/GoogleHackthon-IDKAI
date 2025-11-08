@@ -8,7 +8,8 @@ import {
   saveModule4Data,
   clearModule4Data,
   clearFinalAnalysisData,
-  setCurrentModule
+  setCurrentModule,
+  requireSessionId
 } from "@/lib/session-manager"
 
 interface DebateMessage {
@@ -62,6 +63,7 @@ interface Module4Cache {
 
 const CACHE_KEY = 'module4_debate_cache'
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const NO_SESSION_MESSAGE = 'No active pipeline session. Run Module 1 analysis first.'
 
 interface EnrichmentItem {
   category: string
@@ -81,6 +83,9 @@ export function Module4Client() {
   const [error, setError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string>("checking")
   const router = useRouter()
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const [processingStep, setProcessingStep] = useState<string>("")
   const [debugLogs, setDebugLogs] = useState<string[]>([])
   const [showDebugTerminal, setShowDebugTerminal] = useState<boolean>(false)
@@ -90,6 +95,21 @@ export function Module4Client() {
   const debugTerminalRef = useRef<HTMLDivElement>(null)
   const debateViewRef = useRef<HTMLDivElement>(null)
 
+  const appendQueryParams = (url: string, params: Record<string, string | number | boolean>) => {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+    const parsed = new URL(url, base)
+
+    Object.entries(params).forEach(([key, value]) => {
+      parsed.searchParams.set(key, String(value))
+    })
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return parsed.toString()
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  }
+
   const addDebugLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
     setDebugLogs(prev => [...prev, `[${timestamp}] ${message}`])
@@ -97,6 +117,12 @@ export function Module4Client() {
 
   const loadFromCache = async () => {
     try {
+      const activeSession = sessionIdRef.current
+      if (!activeSession) {
+        console.warn('[Module4] Skipping cache load - session id unavailable')
+        return
+      }
+
       const cached = localStorage.getItem(CACHE_KEY)
       
       if (!cached) {
@@ -151,7 +177,8 @@ export function Module4Client() {
       }
       
       try {
-        const itemsResponse = await fetch('/module4/api/enrichment-items', { cache: 'no-store' })
+        const itemsUrl = appendQueryParams('/module4/api/enrichment-items', { session_id: activeSession })
+        const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
         if (itemsResponse.ok) {
           const itemsData = await itemsResponse.json()
           if (itemsData.items && Array.isArray(itemsData.items)) {
@@ -218,8 +245,7 @@ export function Module4Client() {
   // ONLY run on mount, client-side only
   useEffect(() => {
     setCurrentModule(4)
-    
-    // Add styles
+
     const style = document.createElement('style')
     style.textContent = `
       .custom-scrollbar::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -231,17 +257,38 @@ export function Module4Client() {
       .animate-fade-in-up { animation: fade-in-up 0.6s ease-out; }
     `
     document.head.appendChild(style)
-    
-    // Initialize
-    checkBackendHealth()
-    loadFromCache()
-    
+
+    try {
+      const activeSessionId = requireSessionId()
+      setSessionId(activeSessionId)
+      sessionIdRef.current = activeSessionId
+    } catch (error) {
+      console.error('[Module4] No active session available', error)
+      setSessionError(NO_SESSION_MESSAGE)
+      setError(NO_SESSION_MESSAGE)
+    }
+
     return () => {
       if (document.head.contains(style)) {
         document.head.removeChild(style)
       }
     }
   }, [])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+    if (!sessionId) {
+      return
+    }
+
+    if (sessionError) {
+      setSessionError(null)
+      setError(null)
+    }
+
+    checkBackendHealth()
+    loadFromCache()
+  }, [sessionId, sessionError])
 
   // Auto-scroll to latest message in debate view
   useEffect(() => {
@@ -296,10 +343,18 @@ export function Module4Client() {
       console.log('[Module4] Step 1/3: Requesting Module 3 to send perspective data to Module 4...')
       addDebugLog('[STEP 1/3] Fetching perspectives from Module 3...')
       
+      const activeSession = sessionIdRef.current
+      if (!activeSession) {
+        addDebugLog('[ERROR] No active session id available - aborting process')
+        setSessionError(NO_SESSION_MESSAGE)
+        throw new Error(NO_SESSION_MESSAGE)
+      }
+
       const sendDataResponse = await fetch('/module3/api/send_to_module4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store'
+        cache: 'no-store',
+        body: JSON.stringify({ session_id: activeSession })
       })
       
       if (!sendDataResponse.ok) {
@@ -349,60 +404,64 @@ export function Module4Client() {
           addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
           
           try {
-            const enrichUrl = "/module4/api/enrich-perspectives"
+            const enrichUrl = appendQueryParams('/module4/api/enrich-perspectives', {
+              session_id: activeSession,
+            })
             addDebugLog('[INFO] Calling enrichment endpoint...')
-            
+
             const controller = new AbortController()
             const enrichResponse = await fetch(enrichUrl, {
               method: "POST",
               headers: { 'Content-Type': 'application/json' },
               cache: 'no-store',
               signal: controller.signal,
-              keepalive: true
+              keepalive: true,
             })
-            
+
             if (enrichResponse.ok) {
               const enrichData = await enrichResponse.json()
-            
-            if (enrichData.status === "completed") {
-              latestEnrichment = enrichData
-              setEnrichmentResult(enrichData)
-              const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
-              addDebugLog(`[SUCCESS] Enrichment completed with ${totalLinks} verified web sources`)
-              setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
-              
-              // Fetch enrichment items for display immediately
-              addDebugLog('[INFO] Fetching enrichment items for display...')
-              try {
-                const itemsResponse = await fetch('/module4/api/enrichment-items', { cache: 'no-store' })
-                if (itemsResponse.ok) {
-                  const itemsData = await itemsResponse.json()
-                  if (itemsData.status === "completed" && itemsData.items.length > 0) {
-                    setEnrichmentItems(itemsData.items)
-                    setShowEnrichmentItems(true)
-                    addDebugLog(`[SUCCESS] Loaded ${itemsData.total_items} enrichment items for display`)
-                    await new Promise(resolve => setTimeout(resolve, 2000))
+
+              if (enrichData.status === "completed") {
+                latestEnrichment = enrichData
+                setEnrichmentResult(enrichData)
+                const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
+                addDebugLog(`[SUCCESS] Enrichment completed with ${totalLinks} verified web sources`)
+                setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
+
+                // Fetch enrichment items for display immediately
+                addDebugLog('[INFO] Fetching enrichment items for display...')
+                try {
+                  const itemsUrl = appendQueryParams('/module4/api/enrichment-items', {
+                    session_id: activeSession,
+                  })
+                  const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
+                  if (itemsResponse.ok) {
+                    const itemsData = await itemsResponse.json()
+                    if (itemsData.status === "completed" && itemsData.items.length > 0) {
+                      setEnrichmentItems(itemsData.items)
+                      setShowEnrichmentItems(true)
+                      addDebugLog(`[SUCCESS] Loaded ${itemsData.total_items} enrichment items for display`)
+                      await new Promise(resolve => setTimeout(resolve, 2000))
+                    }
                   }
+                } catch (err) {
+                  console.error('[Module4] Failed to fetch enrichment items:', err)
                 }
-              } catch (err) {
-                console.error('[Module4] Failed to fetch enrichment items:', err)
+              } else {
+                addDebugLog('[WARNING] Enrichment did not complete, proceeding with base perspectives')
               }
             } else {
-              addDebugLog('[WARNING] Enrichment did not complete, proceeding with base perspectives')
+              addDebugLog('[WARNING] Enrichment endpoint failed, proceeding with base perspectives')
             }
-          } else {
-            addDebugLog('[WARNING] Enrichment endpoint failed, proceeding with base perspectives')
+
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          } catch (err) {
+            console.error('[Module4] Enrichment error:', err)
+            addDebugLog('[WARNING] Enrichment failed, proceeding with base perspectives')
+            setProcessingStep("Step 2/3: Web enrichment skipped, using base perspectives...")
+            await new Promise(resolve => setTimeout(resolve, 1500))
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          
-        } catch (err) {
-          console.error('[Module4] Enrichment error:', err)
-          addDebugLog('[WARNING] Enrichment failed, proceeding with base perspectives')
-          setProcessingStep("Step 2/3: Web enrichment skipped, using base perspectives...")
-          await new Promise(resolve => setTimeout(resolve, 1500))
         }
-      }
       }
       
       setProcessingStep("Step 3/3: Running AI agent debate (Leftist vs Rightist vs Judge)... This may take several minutes.")
@@ -414,23 +473,26 @@ export function Module4Client() {
       setShowDebateMessages(true)
       setLiveDebateMessages([])
       
-      // Try multiple times with direct orchestrator URL as fallback
+      // Try multiple times to guard against transient orchestrator issues
       let debateResponse: Response | null = null
       let lastError: Error | null = null
       
+      const debateUrl = appendQueryParams('/module4/api/debate', {
+        session_id: activeSession,
+        use_enriched: true,
+      })
+
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           addDebugLog(`[ATTEMPT ${attempt}/3] Calling debate endpoint...`)
           
           // First 2 attempts: use Next.js rewrite
-          // Last attempt: bypass Next.js and go direct to orchestrator
-          const url = attempt < 3 
-            ? "/module4/api/debate"
-            : "http://localhost:8000/module4/api/debate"
+          // Last attempt repeats via orchestrator in case of transient failures
+          const url = debateUrl
           
           console.log(`[Module4] Attempt ${attempt}: Calling ${url}`)
           
-          debateResponse = await fetch(`${url}?use_enriched=true`, {
+          debateResponse = await fetch(url, {
             method: "POST",
             headers: { 'Content-Type': 'application/json' },
             cache: 'no-store'
@@ -481,7 +543,10 @@ export function Module4Client() {
       // Fetch debate messages for animated display
       addDebugLog('[INFO] Fetching debate messages for display...')
       try {
-        const messagesResponse = await fetch('/module4/api/debate-messages', { cache: 'no-store' })
+        const messagesUrl = appendQueryParams('/module4/api/debate-messages', {
+          session_id: activeSession,
+        })
+        const messagesResponse = await fetch(messagesUrl, { cache: 'no-store' })
         if (messagesResponse.ok) {
           const messagesData = await messagesResponse.json()
           if (messagesData.status === "completed" && Array.isArray(messagesData.messages)) {
@@ -618,7 +683,7 @@ export function Module4Client() {
           <div className="flex gap-3 mb-6">
             <LiquidButton 
               onClick={startDebateProcess} 
-              disabled={loading || backendStatus !== "ready"}
+              disabled={loading || backendStatus !== "ready" || !sessionId}
             >
               {loading ? (
                 <>

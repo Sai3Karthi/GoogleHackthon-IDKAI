@@ -13,17 +13,32 @@ port = 8000
 host = 127.0.0.1
 port = 8001
 
+[module2]
+# Host IP or domain for Module2 backend (Classification)
+host = 127.0.0.1
+port = 8002
+
 [module3]
 # Host IP or domain for Module3 backend (Perspective Generation)
 # Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
 host = 127.0.0.1
-port = 8002
+port = 8003
+
+[module4]
+# Host IP or domain for Module4 backend (Debate & Trust Scoring)
+host = 127.0.0.1
+port = 8004
 
 [frontend]
 # Host IP or domain for Next.js frontend
 # Use localhost for local dev, 0.0.0.0 for all interfaces, or domain name
 host = localhost
 port = 3000
+
+[database]
+# Optional fallback connection string for local development. Production should use DATABASE_URL env.
+url = postgresql://idkai_local:password@localhost:5432/idkai_local
+echo = false
 
 # Production Example:
 # [orchestrator]

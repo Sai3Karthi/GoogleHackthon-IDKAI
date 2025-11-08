@@ -1,0 +1,38 @@
+[
+    {
+        "color": "blue",
+        "bias_x": 0.619,
+        "significance_y": 0.8,
+        "text": "The company is likely using the 'free domain' as a loss leader to attract customers and then upsell them on more profitable services."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.7619,
+        "significance_y": 0.8,
+        "text": "This is a clear case of deceptive advertising, plain and simple. They are using the word 'free' to lure customers into a contract they don't fully understand."
+    },
+    {
+        "color": "violet",
+        "bias_x": 0.9048,
+        "significance_y": 0.8,
+        "text": "This is not just a business practice; it's a moral failing that exploits the trust of honest consumers."
+    },
+    {
+        "color": "blue",
+        "bias_x": 0.7143,
+        "significance_y": 0.7,
+        "text": "The user's complaint is likely based on a misunderstanding of the offer's terms, which are probably clearly stated elsewhere."
+    },
+    {
+        "color": "indigo",
+        "bias_x": 0.8571,
+        "significance_y": 0.7,
+        "text": "The company is likely exploiting a loophole in consumer protection laws regarding the definition of 'free' in digital services."
+    },
+    {
+        "color": "violet",
+        "bias_x": 1.0,
+        "significance_y": 0.7,
+        "text": "This is a textbook example of how modern corporations prioritize profit over integrity, using deception as a standard business tool."
+    }
+]
