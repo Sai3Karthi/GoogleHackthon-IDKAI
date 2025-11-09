@@ -839,19 +839,20 @@ export function Module4Client() {
     console.log('[Module4] Cleared debate display (cache and enrichment data preserved)')
   }
 
-  const getAgentDisplay = (agent: string) => {
-    if (!agent) return { name: 'System', class: 'system' }
-    const lowerAgent = agent.toLowerCase()
-    if (lowerAgent.includes('leftist') || lowerAgent.includes('left')) {
-      return { name: 'Leftist Agent', class: 'leftist' }
-    } else if (lowerAgent.includes('rightist') || lowerAgent.includes('right')) {
-      return { name: 'Rightist Agent', class: 'rightist' }
-    } else if (lowerAgent.includes('judge') || lowerAgent.includes('moderator')) {
-      return { name: 'Judge AI', class: 'judge' }
-    } else {
-      return { name: 'System', class: 'system' }
-    }
-  }
+  // Helper function for agent display (unused but kept for future use)
+  // const getAgentDisplay = (agent: string) => {
+  //   if (!agent) return { name: 'System', class: 'system' }
+  //   const lowerAgent = agent.toLowerCase()
+  //   if (lowerAgent.includes('leftist') || lowerAgent.includes('left')) {
+  //     return { name: 'Leftist Agent', class: 'leftist' }
+  //   } else if (lowerAgent.includes('rightist') || lowerAgent.includes('right')) {
+  //     return { name: 'Rightist Agent', class: 'rightist' }
+  //   } else if (lowerAgent.includes('judge') || lowerAgent.includes('moderator')) {
+  //     return { name: 'Judge AI', class: 'judge' }
+  //   } else {
+  //     return { name: 'System', class: 'system' }
+  //   }
+  // }
 
   return (
     <ModuleLayout
@@ -866,7 +867,7 @@ export function Module4Client() {
           <h3 className="text-base font-light text-white/70 mb-6 tracking-wide">Core Principle</h3>
           <div className="text-white/60 text-sm leading-relaxed">
             <p className="mb-4">
-              <span className="text-white">"AI can never be sure if information is true, only humans can."</span>
+              <span className="text-white">&ldquo;AI can never be sure if information is true, only humans can.&rdquo;</span>
             </p>
             <p>
               Therefore, we make the AI as sophisticated as possible to provide comprehensive analysis 
@@ -1167,7 +1168,7 @@ export function Module4Client() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8z"></path>
               </svg>
               <p className="text-white/40 text-sm mb-2">Ready for comprehensive analysis.</p>
-              <p className="text-white/30 text-xs">Click "Start Complete Analysis" to fetch data, enrich with web evidence, and run AI debate.</p>
+              <p className="text-white/30 text-xs">Click &ldquo;Start Complete Analysis&rdquo; to fetch data, enrich with web evidence, and run AI debate.</p>
             </div>
           )}
 

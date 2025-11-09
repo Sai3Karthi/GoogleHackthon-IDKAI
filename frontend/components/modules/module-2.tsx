@@ -100,7 +100,7 @@ export function Module2() {
     } finally {
       setLoading(false)
     }
-  }, [getModule2Data, saveModule2Data, startRedirectCountdown])
+  }, [startRedirectCountdown])
 
   useEffect(() => {
     sessionIdRef.current = sessionId
@@ -358,7 +358,7 @@ export function Module2() {
               </h3>
               <div className="flex flex-wrap gap-3">
                 {Object.entries(output.detailed_analysis.classification)
-                  .filter(([_, value]) => value > 5)
+                  .filter(([, value]) => value > 5)
                   .sort((a, b) => b[1] - a[1])
                   .map(([category, value]) => (
                     <div

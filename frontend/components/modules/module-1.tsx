@@ -424,7 +424,7 @@ export function Module1() {
                         className="max-h-64 mx-auto rounded border border-white/10"
                       />
                       <p className="text-white/60 text-sm">
-                        {imageFile?.name} ({(imageFile?.size! / 1024).toFixed(0)} KB)
+                        {imageFile?.name} ({((imageFile?.size ?? 0) / 1024).toFixed(0)} KB)
                       </p>
                     </div>
                   ) : (

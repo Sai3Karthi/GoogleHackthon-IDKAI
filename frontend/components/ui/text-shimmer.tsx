@@ -48,7 +48,16 @@ export function TextShimmer({
         } as React.CSSProperties
       }
     >
-      {children}
+      {Component === 'p' ? <p className="m-0">{children}</p> : 
+       Component === 'span' ? <span>{children}</span> :
+       Component === 'div' ? <div>{children}</div> :
+       Component === 'h1' ? <h1 className="m-0">{children}</h1> :
+       Component === 'h2' ? <h2 className="m-0">{children}</h2> :
+       Component === 'h3' ? <h3 className="m-0">{children}</h3> :
+       Component === 'h4' ? <h4 className="m-0">{children}</h4> :
+       Component === 'h5' ? <h5 className="m-0">{children}</h5> :
+       Component === 'h6' ? <h6 className="m-0">{children}</h6> :
+       children}
     </motion.div>
   );
 }

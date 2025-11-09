@@ -55,6 +55,7 @@ export function WebGLShader() {
     camera: THREE.OrthographicCamera | null
     renderer: THREE.WebGLRenderer | null
     mesh: THREE.Mesh | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     uniforms: any
     animationId: number | null
     lastFrameTime: number

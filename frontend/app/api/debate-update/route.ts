@@ -60,7 +60,7 @@ export async function GET() {
       keepAlive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': keepalive\n\n'))
-        } catch (keepAliveError) {
+        } catch {
           if (keepAlive) {
             clearInterval(keepAlive)
             keepAlive = null

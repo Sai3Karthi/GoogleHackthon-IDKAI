@@ -2036,7 +2036,7 @@ export function Module3() {
               <section>
                 <h3 className="text-lg font-light text-white/90 mb-3">The Psychology Behind It</h3>
                 <p className="text-sm mb-3">
-                  Human perception of information is inherently subjective and influenced by cognitive biases, personal experiences, and ideological frameworks. Rather than attempting to determine "absolute truth," our system acknowledges this fundamental reality and explores the spectrum of interpretations.
+                  Human perception of information is inherently subjective and influenced by cognitive biases, personal experiences, and ideological frameworks. Rather than attempting to determine &ldquo;absolute truth,&rdquo; our system acknowledges this fundamental reality and explores the spectrum of interpretations.
                 </p>
                 <p className="text-sm">
                   By generating multiple perspectives across the ideological spectrum, we create a comprehensive map of how different viewpoints might interpret the same information. This approach is grounded in several psychological principles:
