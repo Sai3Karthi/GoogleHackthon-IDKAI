@@ -8,7 +8,12 @@ interface PerspectiveUpdateEvent extends PerspectiveUpdatePayload {
 
 type PerspectiveUpdateListener = (data: PerspectiveUpdateEvent) => void
 
-const listeners = new Set<PerspectiveUpdateListener>()
+type ListenerRecord = {
+  sessionId: string | null
+  listener: PerspectiveUpdateListener
+}
+
+const listeners = new Set<ListenerRecord>()
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -17,6 +22,7 @@ export async function POST(request: Request) {
   try {
     const rawData = await request.json()
     const data: PerspectiveUpdatePayload = isRecord(rawData) ? rawData : {}
+    const sessionId = typeof data.session_id === 'string' ? data.session_id : null
     const color = typeof data.color === 'string' ? data.color : 'unknown'
     const total = typeof data.count === 'number' ? data.count : 'unknown'
     const batchSize = typeof data.batch_size === 'number' ? data.batch_size : 'unknown'
@@ -27,8 +33,11 @@ export async function POST(request: Request) {
       type: typeof data.type === 'string' ? (data.type as string) : 'batch'
     }
     
-    listeners.forEach(listener => {
+    listeners.forEach(({ sessionId: listenerSessionId, listener }) => {
       try {
+        if (sessionId && listenerSessionId && listenerSessionId !== sessionId) {
+          return
+        }
         listener(event)
       } catch (listenerError) {
         console.error('Error notifying listener:', listenerError)
@@ -44,10 +53,12 @@ export async function POST(request: Request) {
 }
 
 // SSE endpoint for real-time updates
-export async function GET() {
+export async function GET(request: Request) {
   const encoder = new TextEncoder()
   let keepAlive: ReturnType<typeof setInterval> | null = null
-  let activeListener: PerspectiveUpdateListener | null = null
+  let listenerRecord: ListenerRecord | null = null
+  const url = new URL(request.url)
+  const sessionId = url.searchParams.get('session_id')
   
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -65,8 +76,8 @@ export async function GET() {
         }
       }
       
-      listeners.add(listener)
-      activeListener = listener
+      listenerRecord = { sessionId, listener }
+      listeners.add(listenerRecord)
       
       // Cleanup on disconnect
       keepAlive = setInterval(() => {
@@ -77,7 +88,9 @@ export async function GET() {
             clearInterval(keepAlive)
             keepAlive = null
           }
-          listeners.delete(listener)
+          if (listenerRecord) {
+            listeners.delete(listenerRecord)
+          }
           console.log('[SSE] Client disconnected')
         }
       }, 15000)
@@ -87,9 +100,9 @@ export async function GET() {
         clearInterval(keepAlive)
         keepAlive = null
       }
-      if (activeListener) {
-        listeners.delete(activeListener)
-        activeListener = null
+      if (listenerRecord) {
+        listeners.delete(listenerRecord)
+        listenerRecord = null
       }
     }
   })

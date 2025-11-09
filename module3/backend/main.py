@@ -614,6 +614,7 @@ async def execute_pipeline(
             api_request.generate_perspectives,
             module3_input,
             progress_callback=_progress_handler,
+            notification_context={"session_id": session_id},
         )
         base_perspectives = []
         if isinstance(generation_result, dict):

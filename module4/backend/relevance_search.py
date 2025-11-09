@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from threading import Lock, Semaphore
+from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -149,20 +149,35 @@ class CustomSearchClient:
         settings: Dict[str, Any],
         *,
         max_results: int,
+        use_discovery_client: bool = False,
     ) -> None:
         self.api_key = api_key
         self.search_engine_id = search_engine_id
         self.settings = settings or {}
         self.max_results = max(1, max_results)
         self._service = None
+        self._service_lock = Lock()
 
-        if build and self.api_key and self.search_engine_id:
+        self._service_disabled_reason: Optional[str] = None
+
+        if use_discovery_client and build and self.api_key and self.search_engine_id:
             try:
-                self._service = build("customsearch", "v1", developerKey=self.api_key)
+                self._service = build(
+                    "customsearch",
+                    "v1",
+                    developerKey=self.api_key,
+                    cache_discovery=False,
+                )
                 print("Google Custom Search discovery client initialized")
             except Exception as exc:  # pragma: no cover - discovery init optional
-                print(f"Warning: Could not initialize discovery client: {exc}")
                 self._service = None
+                self._service_disabled_reason = f"Discovery client disabled: {exc}"
+                print(f"Warning: Could not initialize discovery client: {exc}")
+        elif use_discovery_client and not build:
+            self._service_disabled_reason = "google-api-python-client not available"
+
+        if not use_discovery_client:
+            self._service_disabled_reason = "Discovery client disabled via configuration"
 
     def search(self, query: str) -> List[SearchResult]:
         if not self.api_key or not self.search_engine_id or not query.strip():
@@ -170,12 +185,14 @@ class CustomSearchClient:
 
         if self._service:
             try:
-                request = self._service.cse().list(**self._build_params(query))
-                payload = request.execute()
+                with self._service_lock:
+                    request = self._service.cse().list(**self._build_params(query))
+                    payload = request.execute()
                 return self._parse_payload(payload)
             except Exception as exc:  # pragma: no cover - discovery client errors
                 print(f"Warning: Discovery client request failed: {exc}")
                 self._service = None
+                self._service_disabled_reason = f"Discovery client error: {exc}"
 
         return self._http_search(query)
 
@@ -404,11 +421,13 @@ class RelevanceSearchSystem:
         self.parallel_workers = min(self.parallel_workers, self.global_parallel_limit)
         self.executor = _get_shared_executor(self.global_parallel_limit)
 
+        use_discovery_client = bool(search_settings.get("use_discovery_client", False))
         self.search_client = CustomSearchClient(
             self.api_key,
             self.search_engine_id,
             search_settings,
             max_results=self.links_per_text * 2,
+            use_discovery_client=use_discovery_client,
         )
 
         self.search_limiter = _get_shared_rate_limiter(
@@ -436,6 +455,7 @@ class RelevanceSearchSystem:
         self.topic_keywords = self._extract_keywords_from_topic()
 
         self.gemini_model = None
+        self._gemini_lock = Lock()
         try:
             genai.configure(api_key=self.api_key)
             model_name = gemini_settings.get("model", "gemini-2.0-flash")
@@ -529,10 +549,11 @@ class RelevanceSearchSystem:
         for attempt in range(self.max_retries):
             try:
                 self.gemini_limiter.acquire()
-                response = self.gemini_model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.3, "max_output_tokens": 150},
-                )
+                with self._gemini_lock:
+                    response = self.gemini_model.generate_content(
+                        prompt,
+                        generation_config={"temperature": 0.3, "max_output_tokens": 150},
+                    )
                 result = (response.text or original_text).strip()
                 if not result:
                     result = original_text
@@ -614,10 +635,11 @@ class RelevanceSearchSystem:
         for attempt in range(self.max_retries):
             try:
                 self.gemini_limiter.acquire()
-                response = self.gemini_model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.2, "max_output_tokens": 200},
-                )
+                with self._gemini_lock:
+                    response = self.gemini_model.generate_content(
+                        prompt,
+                        generation_config={"temperature": 0.2, "max_output_tokens": 200},
+                    )
                 payload = self._safe_parse_json(response.text)
                 if not payload:
                     raise ValueError("Empty relevance response")
@@ -674,10 +696,11 @@ class RelevanceSearchSystem:
         for attempt in range(self.max_retries):
             try:
                 self.gemini_limiter.acquire()
-                response = self.gemini_model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.2, "max_output_tokens": 200},
-                )
+                with self._gemini_lock:
+                    response = self.gemini_model.generate_content(
+                        prompt,
+                        generation_config={"temperature": 0.2, "max_output_tokens": 200},
+                    )
                 payload = self._safe_parse_json(response.text)
                 if payload:
                     with _TRUST_LOCK:

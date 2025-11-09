@@ -467,7 +467,7 @@ async def process_module1_output(request: ProcessRequest) -> Module2Output:
         logger.info("Classifying content (length=%s)", len(original_text))
         try:
             classification_result = await asyncio.to_thread(classifier.classify, original_text)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             error_msg = str(exc)
             if any(token in error_msg for token in ("403", "Permission", "leaked")):
                 raise HTTPException(
@@ -477,7 +477,17 @@ async def process_module1_output(request: ProcessRequest) -> Module2Output:
                         "Please generate a new key and update GEMINI_API_KEY."
                     ),
                 ) from exc
-            raise HTTPException(status_code=500, detail=f"Classification failed: {error_msg}") from exc
+            
+            logger.warning("Classification failed, attempting with truncated content: %s", str(exc)[:100])
+            truncated_text = original_text[:2000] if len(original_text) > 2000 else original_text
+            try:
+                classification_result = await asyncio.to_thread(classifier.classify, truncated_text)
+            except Exception as retry_exc:
+                logger.error("Classification failed even with truncated content: %s", str(retry_exc)[:100])
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Classification failed with original and truncated content. Original error: {error_msg[:200]}"
+                ) from exc
 
         if not classification_result:
             raise HTTPException(status_code=500, detail="Classification failed to produce a result")
@@ -489,7 +499,7 @@ async def process_module1_output(request: ProcessRequest) -> Module2Output:
         logger.info("Generating summary for session %s", session_id_str)
         try:
             summary_result = await asyncio.to_thread(summarizer.summarize, original_text)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             error_msg = str(exc)
             if any(token in error_msg for token in ("403", "Permission", "leaked")):
                 raise HTTPException(
@@ -499,7 +509,17 @@ async def process_module1_output(request: ProcessRequest) -> Module2Output:
                         "Please generate a new key and update GEMINI_API_KEY."
                     ),
                 ) from exc
-            raise HTTPException(status_code=500, detail=f"Summarization failed: {error_msg}") from exc
+            
+            logger.warning("Summarization failed, attempting with truncated content: %s", str(exc)[:100])
+            truncated_text = original_text[:2000] if len(original_text) > 2000 else original_text
+            try:
+                summary_result = await asyncio.to_thread(summarizer.summarize, truncated_text)
+            except Exception as retry_exc:
+                logger.error("Summarization failed even with truncated content: %s", str(retry_exc)[:100])
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Summarization failed with original and truncated content. Original error: {error_msg[:200]}"
+                ) from exc
 
         if not summary_result:
             raise HTTPException(status_code=500, detail="Summarization failed to produce a result")

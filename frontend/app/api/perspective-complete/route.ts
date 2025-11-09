@@ -8,7 +8,12 @@ interface PerspectiveCompleteEvent extends PerspectiveCompletePayload {
 
 type PerspectiveCompleteListener = (data: PerspectiveCompleteEvent) => void
 
-const listeners = new Set<PerspectiveCompleteListener>()
+type ListenerRecord = {
+  sessionId: string | null
+  listener: PerspectiveCompleteListener
+}
+
+const listeners = new Set<ListenerRecord>()
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -16,6 +21,7 @@ export async function POST(request: Request) {
   try {
     const rawData = await request.json()
     const data: PerspectiveCompletePayload = isRecord(rawData) ? rawData : {}
+    const sessionId = typeof data.session_id === 'string' ? data.session_id : null
     const totalPerspectives = typeof data.total_perspectives === 'number' ? data.total_perspectives : 'unknown'
     console.log(`[Pipeline Complete] Generated ${totalPerspectives} perspectives`)
 
@@ -24,8 +30,11 @@ export async function POST(request: Request) {
       type: typeof data.type === 'string' ? (data.type as string) : 'complete'
     }
 
-    listeners.forEach(listener => {
+    listeners.forEach(({ sessionId: listenerSessionId, listener }) => {
       try {
+        if (sessionId && listenerSessionId && listenerSessionId !== sessionId) {
+          return
+        }
         listener(event)
       } catch (listenerError) {
         console.error('Error notifying listener:', listenerError)
@@ -41,10 +50,12 @@ export async function POST(request: Request) {
 }
 
 // SSE endpoint for completion notifications
-export async function GET() {
+export async function GET(request: Request) {
   const encoder = new TextEncoder()
   let keepAlive: ReturnType<typeof setInterval> | null = null
-  let activeListener: PerspectiveCompleteListener | null = null
+  let listenerRecord: ListenerRecord | null = null
+  const url = new URL(request.url)
+  const sessionId = url.searchParams.get('session_id')
   
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -60,8 +71,8 @@ export async function GET() {
         }
       }
       
-      listeners.add(listener)
-      activeListener = listener
+      listenerRecord = { sessionId, listener }
+      listeners.add(listenerRecord)
       
       keepAlive = setInterval(() => {
         try {
@@ -71,7 +82,9 @@ export async function GET() {
             clearInterval(keepAlive)
             keepAlive = null
           }
-          listeners.delete(listener)
+          if (listenerRecord) {
+            listeners.delete(listenerRecord)
+          }
           console.log('[SSE] Client disconnected for completions')
         }
       }, 15000)
@@ -81,9 +94,9 @@ export async function GET() {
         clearInterval(keepAlive)
         keepAlive = null
       }
-      if (activeListener) {
-        listeners.delete(activeListener)
-        activeListener = null
+      if (listenerRecord) {
+        listeners.delete(listenerRecord)
+        listenerRecord = null
       }
     }
   })

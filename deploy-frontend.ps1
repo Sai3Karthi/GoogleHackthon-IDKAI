@@ -66,7 +66,6 @@ Write-Host "Region              : $region" -ForegroundColor Cyan
 Write-Host "NEXT_PUBLIC_API_URL : $apiUrl" -ForegroundColor Cyan
 
 $envVars = "NEXT_PUBLIC_API_URL=$apiUrl"
-$buildEnvVars = "NEXT_PUBLIC_API_URL=$apiUrl"
 
 Push-Location (Join-Path $repoRoot 'frontend')
 
@@ -87,33 +86,54 @@ Set-Content -Path $envFilePath -Value $envLines -Encoding UTF8
 
 Write-Host "Building and deploying $serviceName in $region (project $projectId)..." -ForegroundColor Cyan
 
-$deployCommand = @(
-    "run", "deploy", $serviceName,
-    "--source", ".",
-    "--platform", "managed",
-    "--region", $region,
-    "--allow-unauthenticated",
-    "--port", "3000",
-    "--set-env-vars", $envVars,
-    "--set-build-env-vars", $buildEnvVars
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$imageTag = "asia-south1-docker.pkg.dev/$projectId/cloud-run-source-deploy/${serviceName}:${timestamp}"
+
+$buildCommand = @(
+    "builds", "submit", ".",
+    "--tag", $imageTag,
+    "--region", $region
 )
 
+$exitCode = 0
+
 try {
+    $previousNextPublicApi = $env:NEXT_PUBLIC_API_URL
+    $env:NEXT_PUBLIC_API_URL = $apiUrl
+
+    gcloud @buildCommand
+    if ($LASTEXITCODE -ne 0) {
+        $exitCode = $LASTEXITCODE
+        throw "Cloud Build failed"
+    }
+
+    $deployCommand = @(
+        "run", "deploy", $serviceName,
+        "--image", $imageTag,
+        "--platform", "managed",
+        "--region", $region,
+        "--allow-unauthenticated",
+        "--port", "3000",
+        "--set-env-vars", $envVars
+    )
+
     gcloud @deployCommand
     $exitCode = $LASTEXITCODE
 }
 finally {
+    $env:NEXT_PUBLIC_API_URL = $previousNextPublicApi
+
     if ($hadEnvFile) {
         Set-Content -Path $envFilePath -Value $previousEnvContent -Encoding UTF8
     } else {
         Remove-Item -Path $envFilePath -ErrorAction SilentlyContinue
     }
+
+    Pop-Location
 }
 
-Pop-Location
-
 if ($exitCode -ne 0) {
-    Write-Host "Deployment failed. Use 'gcloud builds list --limit 5' to inspect recent builds." -ForegroundColor Red
+    Write-Host "Deployment failed. Inspect Cloud Build or Cloud Run logs for details." -ForegroundColor Red
     exit $exitCode
 }
 

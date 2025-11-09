@@ -757,27 +757,26 @@ export function Module3() {
           finalOutputPayload.rightist.length
         )
 
-        setFinalOutput(finalOutputPayload)
-        setShowOutputGraph(hasFinalOutput)
+        if (hasFinalOutput) {
+          setFinalOutput(finalOutputPayload)
+          setShowOutputGraph(true)
 
-        if (currentInputHash && perspectivesData.length && hasFinalOutput) {
-          savePerspectivesToCache(currentInputHash, perspectivesData, finalOutputPayload)
-          const sessionUpdates: Partial<Module3Data> = {
-            perspectives: perspectivesData,
-            finalOutput: finalOutputPayload,
-            inputHash: currentInputHash,
-          }
-          if (backendFirstViewConsumed || redirectConsumed) {
-            sessionUpdates.firstViewConsumed = backendFirstViewConsumed || redirectConsumed
-          }
-          persistModule3Session(sessionUpdates)
-          if (isBootstrappingRef.current || restoredFromSessionRef.current) {
-            restoredFromSessionRef.current = true
+          if (currentInputHash && perspectivesData.length) {
+            savePerspectivesToCache(currentInputHash, perspectivesData, finalOutputPayload)
+            const sessionUpdates: Partial<Module3Data> = {
+              perspectives: perspectivesData,
+              finalOutput: finalOutputPayload,
+              inputHash: currentInputHash,
+            }
+            if (backendFirstViewConsumed || redirectConsumed) {
+              sessionUpdates.firstViewConsumed = backendFirstViewConsumed || redirectConsumed
+            }
+            persistModule3Session(sessionUpdates)
+            if (isBootstrappingRef.current || restoredFromSessionRef.current) {
+              restoredFromSessionRef.current = true
+            }
           }
         }
-      } else {
-        setFinalOutput(null)
-        setShowOutputGraph(false)
       }
     } catch (error) {
       console.error('[Module3] Error loading completed results:', error)
@@ -995,11 +994,24 @@ export function Module3() {
     }
 
     // Listen for batch updates via Server-Sent Events
-    const batchEventSource = new EventSource('/api/perspective-update')
+    const activeSessionId = sessionIdRef.current
+    if (!activeSessionId) {
+      console.warn('[Module3] Aborting SSE attachment due to missing session id after guard')
+      eventListenersAttachedRef.current = false
+      return
+    }
+
+    const encodedSessionId = encodeURIComponent(activeSessionId)
+    const batchEventSource = new EventSource(`/api/perspective-update?session_id=${encodedSessionId}`)
     
     batchEventSource.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data)
+
+        const eventSessionId = typeof data.session_id === 'string' ? data.session_id : null
+        if (eventSessionId && eventSessionId !== sessionIdRef.current) {
+          return
+        }
         
         if (data.type === 'batch') {
                     
@@ -1008,8 +1020,8 @@ export function Module3() {
           if (response.ok) {
             const outputData = await response.json()
             
-            if (outputData.perspectives && Array.isArray(outputData.perspectives)) {
-                            setPerspectives([...outputData.perspectives])
+            if (outputData.perspectives && Array.isArray(outputData.perspectives) && outputData.perspectives.length > 0) {
+              setPerspectives([...outputData.perspectives])
             }
           }
         }
@@ -1025,11 +1037,16 @@ export function Module3() {
     }
     
     // Listen for completion via Server-Sent Events
-    const completeEventSource = new EventSource('/api/perspective-complete')
+    const completeEventSource = new EventSource(`/api/perspective-complete?session_id=${encodedSessionId}`)
     
     completeEventSource.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data)
+
+        const eventSessionId = typeof data.session_id === 'string' ? data.session_id : null
+        if (eventSessionId && eventSessionId !== sessionIdRef.current) {
+          return
+        }
         
         if (data.type === 'complete') {
           console.log('[SSE] Pipeline complete signal received')
@@ -1055,7 +1072,9 @@ export function Module3() {
             
             if (finalData.perspectives && Array.isArray(finalData.perspectives)) {
               const allPerspectives = finalData.perspectives
-              setPerspectives(allPerspectives)
+              if (allPerspectives.length > 0) {
+                setPerspectives(allPerspectives)
+              }
               if (isBootstrappingRef.current) {
                 restoredFromSessionRef.current = true
               }

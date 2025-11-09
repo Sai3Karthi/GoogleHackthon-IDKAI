@@ -141,6 +141,7 @@ def generate_perspectives(
     stream_callback: Optional[Callable[[str, List[Dict[str, Any]]], None]] = None,
     progress_callback: Optional[Callable[[str, List[Dict[str, Any]], List[Dict[str, Any]]], None]] = None,
     output_path: Optional[str] = None,
+    notification_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Generate structured perspectives for the supplied input payload."""
 
@@ -178,6 +179,12 @@ def generate_perspectives(
     existing_texts: Set[str] = set()
     all_perspectives: List[Dict[str, Any]] = []
     color_groups = group_by_color(scaffold)
+
+    session_identifier = None
+    if notification_context and isinstance(notification_context, dict):
+        session_value = notification_context.get("session_id")
+        if isinstance(session_value, str) and session_value:
+            session_identifier = session_value
 
     for group in color_groups:
         color_name = group[0]["color"]
@@ -258,13 +265,17 @@ def generate_perspectives(
             target = parsed._replace(path="/api/perspective-update", query="", fragment="")
             url = urlunparse(target)
 
+            payload = {
+                "color": color_name,
+                "count": len(all_perspectives),
+                "batch_size": len(valid_perspectives),
+            }
+            if session_identifier:
+                payload["session_id"] = session_identifier
+
             requests.post(
                 url,
-                json={
-                    "color": color_name,
-                    "count": len(all_perspectives),
-                    "batch_size": len(valid_perspectives),
-                },
+                json=payload,
                 timeout=1,
             )
             logger.info("Notified frontend at %s of %s batch update", url, color_name)
@@ -299,12 +310,16 @@ def generate_perspectives(
         target = parsed._replace(path="/api/perspective-complete", query="", fragment="")
         url = urlunparse(target)
 
+        payload = {
+            "total_perspectives": len(final_obj["perspectives"]),
+            "status": "completed",
+        }
+        if session_identifier:
+            payload["session_id"] = session_identifier
+
         requests.post(
             url,
-            json={
-                "total_perspectives": len(final_obj["perspectives"]),
-                "status": "completed",
-            },
+            json=payload,
             timeout=1,
         )
         logger.info("Notified frontend at %s of pipeline completion", url)
