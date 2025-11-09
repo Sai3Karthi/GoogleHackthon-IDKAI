@@ -1,35 +1,52 @@
 """FastAPI application for the IDK-AI orchestrator."""
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+import logging
+import sys
+
 import httpx
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 import json
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR.parent))
+
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+
+try:
+    from utils.env_loader import load_env_file
+
+    env_path = ROOT_DIR.parent / ".env"
+    if load_env_file(env_path):
+        logger.info("Environment variables loaded from %s", env_path)
+except (ImportError, ValueError):
+    try:  # Fallback to python-dotenv when available
+        from dotenv import load_dotenv
+
+        env_path = ROOT_DIR.parent / ".env"
+        load_dotenv(env_path)
+        logger.info("Environment variables loaded via python-dotenv from %s", env_path)
+    except ImportError:
+        logger.info("Using system environment variables (python-dotenv not available)")
+
 from config_loader import get_config
+
+
+def _module_spec(name: str, default_port: int, description: str):
+    connection = config.get_module_connection(name, default_port)
+    connection["description"] = description
+    return connection
 
 config = get_config()
 
 MODULES = {
-    "module1": {
-        "host": config.get_module1_host(),
-        "port": config.get_module1_port(),
-        "description": "Link Verification & Scam Detection API"
-    },
-    "module2": {
-        "host": config.get_module2_host(),
-        "port": config.get_module2_port(),
-        "description": "Information Classification & Significance Scoring API"
-    },
-    "module3": {
-        "host": config.get_module3_host(),
-        "port": config.get_module3_port(),
-        "description": "Perspective Generation API"
-    },
-    "module4": {
-        "host": config.get_module4_host(),
-        "port": config.get_module4_port(),
-        "description": "Agent Debate & Analysis API"
-    }
+    "module1": _module_spec("module1", 8001, "Link Verification & Scam Detection API"),
+    "module2": _module_spec("module2", 8002, "Information Classification & Significance Scoring API"),
+    "module3": _module_spec("module3", 8003, "Perspective Generation API"),
+    "module4": _module_spec("module4", 8004, "Agent Debate & Analysis API"),
 }
 
 app = FastAPI(
@@ -69,6 +86,8 @@ async def root():
             name: {
                 "host": mod_config["host"],
                 "port": mod_config["port"],
+                "base_url": mod_config["base_url"],
+                "use_https": mod_config["use_https"],
                 "description": mod_config["description"]
             }
             for name, mod_config in MODULES.items()
@@ -97,10 +116,7 @@ async def run_module(module_name: str):
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"http://{mod_config['host']}:{mod_config['port']}/api/health",
-                timeout=2.0
-            )
+            response = await client.get(f"{mod_config['base_url']}/api/health", timeout=2.0)
             if response.status_code == 200:
                 return {
                     "success": True,
@@ -125,17 +141,18 @@ async def proxy_request(module_name: str, path: str, request: Request):
 
     mod_config = MODULES[module_name]
 
-    protocol = "https" if mod_config.get("use_https", False) else "http"
-    port_suffix = "" if mod_config.get("use_https", False) else f":{mod_config['port']}"
     query_string = request.url.query
     path_segment = path or ""
-    target_url = f"{protocol}://{mod_config['host']}{port_suffix}/{path_segment}"
+    base_url = mod_config.get("base_url")
+    target_url = base_url
+    if path_segment:
+        target_url = f"{base_url}/{path_segment}"
     if query_string:
         target_url = f"{target_url}?{query_string}"
 
     body = await request.body()
     headers = dict(request.headers)
-    headers["host"] = mod_config['host']
+    headers["host"] = mod_config["host"]
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as client:
         try:

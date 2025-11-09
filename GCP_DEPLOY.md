@@ -136,11 +136,19 @@ For backend services, ensure the deployed endpoints propagate via environment va
 ```bash
 gcloud run deploy idkai-orchestrator \
   --source . \
-  --set-env-vars GEMINI_API_KEY=your-key,DEPLOYED_BACKEND_URL=https://idkai-backend-454838348123.asia-south1.run.app,DEPLOYED_FRONTEND_URL=https://idkai-frontend-454838348123.asia-south1.run.app \
+  --set-env-vars GEMINI_API_KEY=your-key,DEPLOYED_BACKEND_URL=https://idkai-backend-454838348123.asia-south1.run.app,DEPLOYED_FRONTEND_URL=https://idkai-frontend-454838348123.asia-south1.run.app,ORCHESTRATOR_SERVICE_URL=https://idkai-backend-454838348123.asia-south1.run.app,FRONTEND_SERVICE_URL=https://idkai-frontend-454838348123.asia-south1.run.app \
   --region us-central1
 ```
 
 Repeat the same `DEPLOYED_BACKEND_URL` and `DEPLOYED_FRONTEND_URL` values for module1 through module4 so that runtime requests always route through the orchestrator proxy.
+
+After deployment, record each module's Cloud Run URL and update the orchestrator with:
+
+```bash
+gcloud run services update idkai-orchestrator \
+  --region us-central1 \
+  --update-env-vars MODULE1_SERVICE_URL=https://idkai-module1-XXXX.run.app,MODULE2_SERVICE_URL=https://idkai-module2-XXXX.run.app,MODULE3_SERVICE_URL=https://idkai-module3-XXXX.run.app,MODULE4_SERVICE_URL=https://idkai-module4-XXXX.run.app
+```
 
 Or update after deployment:
 ```bash

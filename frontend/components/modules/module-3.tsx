@@ -231,13 +231,6 @@ export function Module3() {
     { name: "Output", description: "Three JSON files ready for Module 4" },
   ]
 
-  // Hardcoded input data as fallback (from input.json)
-  const fallbackInput = {
-    topic: "Charles James Kirk (October 14, 1993 – September 10, 2025)",
-    text: "Charles James Kirk (October 14, 1993 – September 10, 2025) was an American right-wing political activist, entrepreneur, and media personality who rose to prominence as a leading voice in the MAGA movement. Born in Arlington Heights, Illinois, he dedicated himself to political activism after a brief stint at Harper College. Kirk co-founded Turning Point USA (TPUSA) in 2012 and served as its executive director, establishing the organization as a significant force in conservative youth activism...",
-    significance_score: 0.75
-  }
-
   useEffect(() => {
     setCurrentModule(3)
     try {
@@ -372,50 +365,17 @@ export function Module3() {
           return
         }
 
-        console.log('Backend not available, using fallback input')
-        setInputData(fallbackInput)
-
-        const hash = generateInputHash({
-          topic: fallbackInput.topic,
-          text: fallbackInput.text
-        })
-        if (isBootstrappingRef.current) {
-          ignoreNextInputHashRef.current = true
-        }
-        setCurrentInputHash(hash)
-
-        const cached = loadPerspectivesFromCache(hash)
-        if (cached) {
-          console.log('[Module3] Loading from cache (fallback):', cached.perspectives.length, 'perspectives')
-          setPerspectives(cached.perspectives)
-          setFinalOutput(cached.finalOutput)
-          console.log('[Module3] Cache loaded successfully (fallback)')
-        } else {
-          console.log('[Module3] No cache found for hash (fallback):', hash)
-        }
-
+        console.log('[Module3] Backend input unavailable; prompting user to run Module 1')
+        setSessionError('Module 3 needs fresh results from Module 1. Run Module 1 analysis, then return here to continue the pipeline.')
         setBackendRunning(false)
         completeBootstrapping()
+        return
       } catch (error) {
         console.error('Error loading input data:', error)
-        setInputData(fallbackInput)
         setBackendRunning(false)
-
-        const hash = generateInputHash({
-          topic: fallbackInput.topic,
-          text: fallbackInput.text
-        })
-        if (isBootstrappingRef.current) {
-          ignoreNextInputHashRef.current = true
-        }
-        setCurrentInputHash(hash)
-
-        const cached = loadPerspectivesFromCache(hash)
-        if (cached) {
-          setPerspectives(cached.perspectives)
-          setFinalOutput(cached.finalOutput)
-        }
+        setSessionError('Module 3 could not load upstream data. Please run Module 1 and retry this module.')
         completeBootstrapping()
+        return
       }
     }
 

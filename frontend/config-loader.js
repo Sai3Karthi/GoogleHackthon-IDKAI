@@ -52,10 +52,12 @@ function loadConfig() {
     return {
       orchestratorHost: config.orchestrator?.host || '127.0.0.1',
       orchestratorPort: parseInt(config.orchestrator?.port || '8000'),
+      orchestratorServiceUrl: config.orchestrator?.service_url || null,
       module3Host: config.module3?.host || '127.0.0.1',
       module3Port: parseInt(config.module3?.port || '8002'),
       frontendHost: config.frontend?.host || 'localhost',
       frontendPort: parseInt(config.frontend?.port || '3000'),
+      frontendServiceUrl: config.frontend?.service_url || null,
     };
   } catch (error) {
     console.error('Error loading config:', error);

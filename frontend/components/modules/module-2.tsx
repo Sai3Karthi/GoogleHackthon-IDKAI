@@ -6,6 +6,9 @@ import { ModuleLayout } from "./module-layout"
 import { saveModule2Data, getModule2Data, setCurrentModule, requireSessionId } from "@/lib/session-manager"
 import type { Module2Output } from "@/lib/pipeline-types"
 
+const POLL_MAX_RETRIES = 12
+const POLL_DELAY_MS = 3000
+
 export function Module2() {
   const router = useRouter()
   const [output, setOutput] = useState<Module2Output | null>(null)
@@ -15,6 +18,7 @@ export function Module2() {
   const hasTriggeredRedirectRef = useRef(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sessionIdRef = useRef<string | null>(null)
 
   const startRedirectCountdown = useCallback(() => {
@@ -52,10 +56,13 @@ export function Module2() {
     console.log('[Module2] Auto-redirect cancelled')
   }, [])
 
-  const loadOutputData = useCallback(async (forcedSessionId?: string) => {
+  const loadOutputData = useCallback(async (forcedSessionId?: string, attempt: number = 0) => {
+    let scheduledRetry = false
     try {
       setLoading(true)
-      setError(null)
+      if (attempt === 0) {
+        setError(null)
+      }
 
       const activeSessionId = forcedSessionId ?? sessionIdRef.current
       if (!activeSessionId) {
@@ -69,17 +76,33 @@ export function Module2() {
       const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`)
 
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("No classification data available. Please run Module 1 analysis first.")
-        }
-        if (response.status === 500) {
+        const shouldRetry = attempt < POLL_MAX_RETRIES
+        if (response.status === 404 && shouldRetry) {
+          setError("Please wait... Module 2 is still processing your session.")
+          scheduledRetry = true
+        } else if ((response.status === 500 || response.status === 503) && shouldRetry) {
           setError("Please wait... Processing your request")
-          setTimeout(() => {
-            void loadOutputData(activeSessionId)
-          }, 3000)
+          scheduledRetry = true
+        } else if (response.status === 404) {
+          throw new Error("Classification data is not available yet. Try refreshing or rerunning Module 1.")
+        } else {
+          throw new Error("Failed to load classification data")
+        }
+
+        if (scheduledRetry) {
+          if (retryTimerRef.current) {
+            clearTimeout(retryTimerRef.current)
+          }
+          retryTimerRef.current = setTimeout(() => {
+            void loadOutputData(activeSessionId, attempt + 1)
+          }, POLL_DELAY_MS)
           return
         }
-        throw new Error("Failed to load classification data")
+      }
+
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
       }
 
       const data: Module2Output = await response.json()
@@ -98,7 +121,13 @@ export function Module2() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data")
     } finally {
-      setLoading(false)
+      if (!scheduledRetry) {
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current)
+          retryTimerRef.current = null
+        }
+        setLoading(false)
+      }
     }
   }, [startRedirectCountdown])
 
@@ -134,6 +163,10 @@ export function Module2() {
     return () => {
       if (redirectTimerRef.current) {
         clearInterval(redirectTimerRef.current)
+      }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
       }
       isMounted = false
     }

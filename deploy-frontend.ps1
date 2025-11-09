@@ -14,24 +14,76 @@ if (-not $projectId) {
     exit 1
 }
 
-$defaultService = "idkai-frontend"
-$serviceNameInput = Read-Host "Enter Cloud Run service name [$defaultService]"
-$serviceName = if ($serviceNameInput) { $serviceNameInput } else { $defaultService }
+$repoRoot = Split-Path -Parent $PSCommandPath
+$configPath = Join-Path $repoRoot 'config.ini'
 
-$defaultRegion = "asia-south1"
-$regionInput = Read-Host "Enter deployment region [$defaultRegion]"
-$region = if ($regionInput) { $regionInput } else { $defaultRegion }
+function Get-OrchestratorUrl {
+    if ($env:NEXT_PUBLIC_API_URL) {
+        return $env:NEXT_PUBLIC_API_URL.TrimEnd('/')
+    }
 
-$defaultApiUrl = $env:NEXT_PUBLIC_API_URL
-if (-not $defaultApiUrl) {
-    $defaultApiUrl = "https://idkai-backend-454838348123.asia-south1.run.app"
+    if (Test-Path $configPath) {
+        $section = $null
+        foreach ($line in Get-Content $configPath) {
+            $trimmed = $line.Trim()
+            if (-not $trimmed -or $trimmed.StartsWith('#') -or $trimmed.StartsWith(';')) {
+                continue
+            }
+            if ($trimmed.StartsWith('[') -and $trimmed.EndsWith(']')) {
+                $section = $trimmed.Trim('[', ']')
+                continue
+            }
+            if ($section -eq 'orchestrator' -and $trimmed -match '^service_url\s*=\s*(.+)$') {
+                $url = $Matches[1].Trim()
+                if ($url) {
+                    return $url.TrimEnd('/')
+                }
+            }
+        }
+    }
+
+    if ($env:DEPLOYED_BACKEND_URL) {
+        return $env:DEPLOYED_BACKEND_URL.TrimEnd('/')
+    }
+
+    return 'https://idkai-backend-454838348123.asia-south1.run.app'
 }
-$apiUrlInput = Read-Host "Enter orchestrator API URL (NEXT_PUBLIC_API_URL) [$defaultApiUrl]"
-$apiUrl = if ($apiUrlInput) { $apiUrlInput } else { $defaultApiUrl }
 
-$envArgs = "NEXT_PUBLIC_API_URL=$apiUrl"
+$serviceName = $env:FRONTEND_SERVICE_NAME
+if (-not $serviceName) {
+    $serviceName = 'idkai-frontend'
+}
 
-Push-Location frontend
+$region = $env:GCLOUD_REGION
+if (-not $region) {
+    $region = 'asia-south1'
+}
+
+$apiUrl = Get-OrchestratorUrl
+
+Write-Host "Service Name        : $serviceName" -ForegroundColor Cyan
+Write-Host "Region              : $region" -ForegroundColor Cyan
+Write-Host "NEXT_PUBLIC_API_URL : $apiUrl" -ForegroundColor Cyan
+
+$envVars = "NEXT_PUBLIC_API_URL=$apiUrl"
+$buildEnvVars = "NEXT_PUBLIC_API_URL=$apiUrl"
+
+Push-Location (Join-Path $repoRoot 'frontend')
+
+$envFilePath = Join-Path (Get-Location) '.env.production'
+$hadEnvFile = Test-Path $envFilePath
+$previousEnvContent = $null
+if ($hadEnvFile) {
+    $previousEnvContent = Get-Content $envFilePath -Raw
+}
+
+$envLines = @()
+if ($hadEnvFile -and $previousEnvContent) {
+    $envLines = $previousEnvContent -split "`r?`n"
+    $envLines = $envLines | Where-Object { $_ -notmatch '^NEXT_PUBLIC_API_URL=' }
+}
+$envLines += "NEXT_PUBLIC_API_URL=$apiUrl"
+Set-Content -Path $envFilePath -Value $envLines -Encoding UTF8
 
 Write-Host "Building and deploying $serviceName in $region (project $projectId)..." -ForegroundColor Cyan
 
@@ -42,11 +94,21 @@ $deployCommand = @(
     "--region", $region,
     "--allow-unauthenticated",
     "--port", "3000",
-    "--set-env-vars", $envArgs
+    "--set-env-vars", $envVars,
+    "--set-build-env-vars", $buildEnvVars
 )
 
-gcloud @deployCommand
-$exitCode = $LASTEXITCODE
+try {
+    gcloud @deployCommand
+    $exitCode = $LASTEXITCODE
+}
+finally {
+    if ($hadEnvFile) {
+        Set-Content -Path $envFilePath -Value $previousEnvContent -Encoding UTF8
+    } else {
+        Remove-Item -Path $envFilePath -ErrorAction SilentlyContinue
+    }
+}
 
 Pop-Location
 
@@ -61,7 +123,7 @@ $serviceUrl = gcloud run services describe $serviceName --region $region --forma
 if ($serviceUrl) {
     Write-Host "Service URL: $serviceUrl" -ForegroundColor Green
     Write-Host "To update NEXT_PUBLIC_API_URL later, run:" -ForegroundColor Cyan
-    Write-Host "gcloud run services update $serviceName --update-env-vars NEXT_PUBLIC_API_URL=$apiUrl --region $region" -ForegroundColor Yellow
+    Write-Host "gcloud run services update $serviceName --region $region --update-env-vars NEXT_PUBLIC_API_URL=$apiUrl" -ForegroundColor Yellow
 } else {
     Write-Host "Unable to retrieve service URL automatically. Check Google Cloud Console." -ForegroundColor Yellow
 }

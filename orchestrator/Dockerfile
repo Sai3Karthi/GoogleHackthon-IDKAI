@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.
 COPY config_loader.py ./config_loader.py
 COPY config.ini ./config.ini
 COPY config.ini.example ./config.ini.example
-COPY config.local.ini ./config.local.ini
+# Create optional override file placeholder so Config loader can source overrides without failing
+RUN touch config.local.ini
 
 # Copy orchestrator package
 COPY orchestrator/ ./orchestrator/

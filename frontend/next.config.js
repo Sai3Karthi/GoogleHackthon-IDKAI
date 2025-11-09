@@ -1,25 +1,92 @@
+const fs = require('fs');
+const path = require('path');
+
+function hydrateEnvFallback() {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return;
+  }
+
+  const envCandidates = ['.env.production', '.env.local', '.env'];
+  for (const filename of envCandidates) {
+    const envPath = path.join(__dirname, filename);
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+
+    const lines = fs.readFileSync(envPath, 'utf-8').split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) {
+        continue;
+      }
+
+      const [key, ...valueParts] = line.split('=');
+      if (key !== 'NEXT_PUBLIC_API_URL') {
+        continue;
+      }
+
+      const value = valueParts.join('=').trim();
+      if (value) {
+        process.env.NEXT_PUBLIC_API_URL = value;
+        console.log(`[Next.js Config] Loaded NEXT_PUBLIC_API_URL from ${filename}`);
+        return;
+      }
+    }
+  }
+}
+
+hydrateEnvFallback();
+
 // Check if we're in production (Vercel) or development (local)
 const isProduction = process.env.NODE_ENV === 'production';
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-let orchestratorUrl;
-
-if (isProduction && apiUrl) {
-  // Production: Use environment variable
-  orchestratorUrl = apiUrl;
-  console.log(`[Next.js Config] Production mode - Using API URL: ${orchestratorUrl}`);
-} else {
-  // Development: Use local config
+let cachedConfig = undefined;
+const loadConfigSafe = () => {
+  if (cachedConfig !== undefined) {
+    return cachedConfig;
+  }
   try {
     const { loadConfig } = require('./config-loader');
-    const config = loadConfig();
-    orchestratorUrl = `http://${config.orchestratorHost}:${config.orchestratorPort}`;
-    console.log(`[Next.js Config] Development mode - Using orchestrator at: ${orchestratorUrl}`);
+    cachedConfig = loadConfig();
+    return cachedConfig;
   } catch (error) {
-    // Fallback for production build without config-loader
-    orchestratorUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    console.log(`[Next.js Config] Fallback mode - Using: ${orchestratorUrl}`);
+    console.warn(`[Next.js Config] Unable to load config.ini: ${error.message}`);
+    cachedConfig = null;
+    return cachedConfig;
   }
+};
+
+const config = loadConfigSafe();
+
+function resolveOrchestratorUrl() {
+  const envFallbacks = [
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.ORCHESTRATOR_SERVICE_URL,
+    process.env.DEPLOYED_BACKEND_URL,
+  ].filter(Boolean);
+
+  if (envFallbacks.length > 0) {
+    const url = envFallbacks[0].replace(/\/+$/, '');
+    console.log(`[Next.js Config] Using orchestrator URL from env: ${url}`);
+    return url;
+  }
+
+  if (config?.orchestratorServiceUrl) {
+    const url = config.orchestratorServiceUrl.replace(/\/+$/, '');
+    console.log(`[Next.js Config] Using orchestrator URL from config.ini: ${url}`);
+    return url;
+  }
+
+  if (config) {
+    const url = `http://${config.orchestratorHost}:${config.orchestratorPort}`;
+    console.log(`[Next.js Config] Using orchestrator host/port fallback: ${url}`);
+    return url;
+  }
+
+  const url = (apiUrl || 'http://localhost:8000').replace(/\/+$/, '');
+  console.log(`[Next.js Config] Using default orchestrator URL: ${url}`);
+  return url;
 }
 
 /** @type {import('next').NextConfig} */
@@ -43,6 +110,7 @@ const nextConfig = {
     ],
   },
   async rewrites() {
+    const orchestratorUrl = resolveOrchestratorUrl();
     return [
       {
         source: '/module1/:path*',

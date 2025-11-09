@@ -4,7 +4,8 @@
   "search_settings": {
     "safe": "active",
     "language": "en",
-    "country": "in"
+    "country": "in",
+    "enable_selenium_fallback": false
   },
   "rate_limiting": {
     "delay_between_requests": 3.0,

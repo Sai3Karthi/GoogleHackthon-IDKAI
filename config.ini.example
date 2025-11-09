@@ -6,34 +6,46 @@
 # Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
 host = 127.0.0.1
 port = 8000
+# Cloud Run endpoint for deployed orchestrator (used when running in cloud mode)
+service_url = https://idkai-backend-EXAMPLE.run.app
 
 [module1]
 # Host IP or domain for Module1 backend (Link Verification)
 # Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
 host = 127.0.0.1
 port = 8001
+# Optional: Cloud Run endpoint for deployed Module 1
+service_url =
 
 [module2]
 # Host IP or domain for Module2 backend (Classification)
 host = 127.0.0.1
 port = 8002
+# Optional: Cloud Run endpoint for deployed Module 2
+service_url =
 
 [module3]
 # Host IP or domain for Module3 backend (Perspective Generation)
 # Use 127.0.0.1 for local only, 0.0.0.0 for all interfaces, or domain name
 host = 127.0.0.1
 port = 8003
+# Optional: Cloud Run endpoint for deployed Module 3
+service_url =
 
 [module4]
 # Host IP or domain for Module4 backend (Debate & Trust Scoring)
 host = 127.0.0.1
 port = 8004
+# Optional: Cloud Run endpoint for deployed Module 4
+service_url =
 
 [frontend]
 # Host IP or domain for Next.js frontend
 # Use localhost for local dev, 0.0.0.0 for all interfaces, or domain name
 host = localhost
 port = 3000
+# Cloud Run endpoint for deployed frontend (used when running in cloud mode)
+service_url = https://idkai-frontend-EXAMPLE.run.app
 
 [database]
 # Optional fallback connection string for local development. Production should use DATABASE_URL env.
