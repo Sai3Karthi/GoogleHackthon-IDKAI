@@ -1,37 +1,10 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
-import { LiquidButton } from "../ui/liquid-glass-button"
 import { saveModule2Data, getModule2Data, setCurrentModule, requireSessionId } from "@/lib/session-manager"
-
-interface ClassificationResult {
-  person: number
-  organization: number
-  social: number
-  critical: number
-  stem: number
-}
-
-interface DetailedAnalysis {
-  classification: ClassificationResult
-  classification_reasoning: string
-  classification_confidence: number
-  significance_score: number
-  significance_explanation: string
-  comprehensive_summary: string
-  requires_debate: boolean
-  debate_priority: string
-}
-
-interface Module2Output {
-  detailed_analysis: DetailedAnalysis
-  module1_confidence: number
-  module1_risk_level: string
-  module1_threats: string[]
-  timestamp: string
-}
+import type { Module2Output } from "@/lib/pipeline-types"
 
 export function Module2() {
   const router = useRouter()
@@ -39,109 +12,20 @@ export function Module2() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
-  const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
+  const hasTriggeredRedirectRef = useRef(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionIdRef = useRef<string | null>(null)
 
-  useEffect(() => {
-    let isMounted = true
-    setCurrentModule(2)
-    try {
-      const activeSessionId = requireSessionId()
-      if (isMounted) {
-        setSessionId(activeSessionId)
-        sessionIdRef.current = activeSessionId
-        console.log('[Module2] Active session detected:', activeSessionId)
-        loadOutputData(activeSessionId)
-      }
-    } catch (err) {
-      console.error('[Module2] No active session available', err)
-      if (isMounted) {
-        setError('No active pipeline session. Run Module 1 analysis first.')
-        setLoading(false)
-      }
-    }
-
-    return () => {
-      if (redirectTimerRef.current) {
-        clearInterval(redirectTimerRef.current)
-      }
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    sessionIdRef.current = sessionId
-  }, [sessionId])
-
-  const loadOutputData = async (forcedSessionId?: string) => {
-    try {
-      setLoading(true)
-      setError(null) // Clear any previous errors
-
-      const activeSessionId = forcedSessionId ?? sessionIdRef.current
-      if (!activeSessionId) {
-        throw new Error('No active pipeline session. Run Module 1 analysis first.')
-      }
-      const encodedSessionId = encodeURIComponent(activeSessionId)
-      
-      // Check if we have session data (user navigated back)
-      const sessionData = getModule2Data()
-      const hasSessionData = sessionData?.output !== undefined && sessionData?.output !== null
-      
-      const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`)
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("No classification data available. Please run Module 1 analysis first.")
-        }
-        // For 500 errors during processing, show "Please wait..." instead
-        if (response.status === 500) {
-          setError("Please wait... Processing your request")
-          // Retry after 3 seconds
-          setTimeout(() => {
-            loadOutputData(activeSessionId)
-          }, 3000)
-          return
-        }
-        throw new Error("Failed to load classification data")
-      }
-      
-      const data = await response.json()
-      setOutput(data)
-      
-      // Save to session
-      saveModule2Data({ output: data })
-      
-      // Only start countdown if:
-      // 1. This is fresh data (no previous session data)
-      // 2. AND we haven't already triggered redirect
-      if (!hasSessionData && !hasTriggeredRedirect) {
-        console.log('[Module2] Fresh data from backend, starting countdown to Module 3')
-        setHasTriggeredRedirect(true)
-        startRedirectCountdown()
-      } else if (hasSessionData) {
-        console.log('[Module2] Backend data loaded, but session exists - user navigated back (no redirect)')
-        setHasTriggeredRedirect(true) // Prevent countdown on navigation back
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const startRedirectCountdown = () => {
+  const startRedirectCountdown = useCallback(() => {
     console.log('[Module2] Starting redirect countdown from 10 seconds')
-    
-    // Clear any existing timer
+
     if (redirectTimerRef.current) {
       clearInterval(redirectTimerRef.current)
     }
-    
+
     setRedirectCountdown(10)
-    
+
     redirectTimerRef.current = setInterval(() => {
       setRedirectCountdown((prev) => {
         if (prev === null || prev <= 1) {
@@ -157,16 +41,103 @@ export function Module2() {
         return prev - 1
       })
     }, 1000)
-  }
+  }, [router])
 
-  const cancelRedirect = () => {
+  const cancelRedirect = useCallback(() => {
     if (redirectTimerRef.current) {
       clearInterval(redirectTimerRef.current)
       redirectTimerRef.current = null
     }
     setRedirectCountdown(null)
     console.log('[Module2] Auto-redirect cancelled')
-  }
+  }, [])
+
+  const loadOutputData = useCallback(async (forcedSessionId?: string) => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const activeSessionId = forcedSessionId ?? sessionIdRef.current
+      if (!activeSessionId) {
+        throw new Error('No active pipeline session. Run Module 1 analysis first.')
+      }
+      const encodedSessionId = encodeURIComponent(activeSessionId)
+
+      const sessionData = getModule2Data()
+      const hasSessionData = sessionData?.output !== undefined && sessionData?.output !== null
+
+      const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`)
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("No classification data available. Please run Module 1 analysis first.")
+        }
+        if (response.status === 500) {
+          setError("Please wait... Processing your request")
+          setTimeout(() => {
+            void loadOutputData(activeSessionId)
+          }, 3000)
+          return
+        }
+        throw new Error("Failed to load classification data")
+      }
+
+      const data: Module2Output = await response.json()
+      setOutput(data)
+
+      saveModule2Data({ output: data })
+
+      if (!hasSessionData && !hasTriggeredRedirectRef.current) {
+        console.log('[Module2] Fresh data from backend, starting countdown to Module 3')
+        hasTriggeredRedirectRef.current = true
+        startRedirectCountdown()
+      } else if (hasSessionData) {
+        console.log('[Module2] Backend data loaded, but session exists - user navigated back (no redirect)')
+        hasTriggeredRedirectRef.current = true
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data")
+    } finally {
+      setLoading(false)
+    }
+  }, [getModule2Data, saveModule2Data, startRedirectCountdown])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    let isMounted = true
+    setCurrentModule(2)
+
+    const bootstrap = async () => {
+      try {
+        const activeSessionId = requireSessionId()
+        if (!isMounted) {
+          return
+        }
+        setSessionId(activeSessionId)
+        sessionIdRef.current = activeSessionId
+        console.log('[Module2] Active session detected:', activeSessionId)
+        await loadOutputData(activeSessionId)
+      } catch (err) {
+        console.error('[Module2] No active session available', err)
+        if (isMounted) {
+          setError('No active pipeline session. Run Module 1 analysis first.')
+          setLoading(false)
+        }
+      }
+    }
+
+    void bootstrap()
+
+    return () => {
+      if (redirectTimerRef.current) {
+        clearInterval(redirectTimerRef.current)
+      }
+      isMounted = false
+    }
+  }, [loadOutputData])
 
   const getDebatePriorityColor = (priority: string) => {
     switch (priority) {

@@ -9,7 +9,6 @@ export default function LandingPage() {
   const router = useRouter()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const heroContentRef = useRef<HTMLDivElement>(null)
-  const animationFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -207,7 +206,7 @@ export default function LandingPage() {
                     Tired of biased news and hidden agendas? Our AI digs deeper, showing you how any piece of information can be seen from multiple angles. Make up your own mind, with all the facts.
                   </p>
                   <p className="text-sm md:text-base text-white/50 font-mono tracking-[0.25em] uppercase" style={{ animation: 'fadeInUp 0.9s ease forwards', animationDelay: '0.15s' }}>
-                    "paste it. sit back. relax. learn"
+                    &ldquo;paste it. sit back. relax. learn&rdquo;
                   </p>
                 </div>
               </div>
@@ -224,7 +223,7 @@ export default function LandingPage() {
                 <div className="dot-matrix-faint dot-matrix-overlay opacity-30 rounded-2xl" />
                 <p className="text-base md:text-lg text-white/70 leading-relaxed">
                   Mis-Dis-Rm information and deepfake ads are flooding the internet, causing financial losses up to 3.5 Cr and public/online distress, biases and manipulations.
-                  Wanna see your favorite video? Nope—here's a news article that claims Ronaldo uses fishywebsite.com to generate a second income. We've had enough.
+                  Wanna see your favorite video? Nope—here&apos;s a news article that claims Ronaldo uses fishywebsite.com to generate a second income. We&apos;ve had enough.
                 </p>
               </div>
             </div>
@@ -308,7 +307,7 @@ export default function LandingPage() {
                 <div className="bg-black/30 border border-white/20 rounded-xl p-4">
                   <div className="text-white font-medium mb-1">The Sourcer</div>
                   <p className="text-sm md:text-base text-white/60 leading-relaxed">
-                    Scans the history and credibility of sources to tackle "right information, untrustable source."
+                    Scans the history and credibility of sources to tackle &ldquo;right information, untrustable source.&rdquo;
                   </p>
                 </div>
                 <div className="bg-black/30 border border-white/20 rounded-xl p-4">

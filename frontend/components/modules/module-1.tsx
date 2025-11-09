@@ -5,43 +5,12 @@ import { useRouter } from "next/navigation"
 import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
 import { saveModule1Data, getModule1Data, setCurrentModule, setSessionId } from "@/lib/session-manager"
-
-interface AnalysisResult {
-  session_id: string
-  input_type: string
-  risk_level: string
-  confidence: number
-  threats: string[]
-  analysis: {
-    red_flags?: string[]
-    ai_explanation?: string
-    ai_reasoning?: string
-    scam_keywords_found?: number
-    phishing_patterns_found?: number
-    text_length?: number
-    visual_elements?: string[]
-    extracted_text?: string
-  }
-  recommendation: string
-  scraped_content?: {
-    title: string
-    text: string
-  } | null
-  ai_powered: boolean
-  image_info?: {
-    format: string
-    size_kb: number
-    dimensions: [number, number]
-    source: string
-  }
-  skip_to_final?: boolean
-  skip_reason?: string
-}
+import type { AnalysisResult, ModuleAnalysisMode } from "@/lib/pipeline-types"
 
 export function Module1() {
   const router = useRouter()
   const [input, setInput] = useState("")
-  const [analysisMode, setAnalysisMode] = useState<"text" | "image">("text")
+  const [analysisMode, setAnalysisMode] = useState<ModuleAnalysisMode>("text")
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState("")
@@ -71,10 +40,7 @@ export function Module1() {
     }
   }, [])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  const processImageFile = (file: File) => {
     if (file.size > 4 * 1024 * 1024) {
       setError("Image too large. Maximum size is 4MB for deployment compatibility.")
       return
@@ -91,17 +57,25 @@ export function Module1() {
 
     const reader = new FileReader()
     reader.onloadend = () => {
-      setImagePreview(reader.result as string)
+      const result = typeof reader.result === "string" ? reader.result : null
+      if (result) {
+        setImagePreview(result)
+      }
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    processImageFile(file)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
     if (file && file.type.startsWith("image/")) {
-      const fakeEvent = { target: { files: [file] } } as any
-      handleFileSelect(fakeEvent)
+      processImageFile(file)
     }
   }
 
@@ -190,8 +164,14 @@ export function Module1() {
     setError(null)
     setResult(null)
 
+    type ImageRequestBody = {
+      image: string
+      image_type: "url" | "base64"
+      context_text?: string
+    }
+
     try {
-      let requestBody: any
+      let requestBody: ImageRequestBody | null = null
 
       if (imageUrl.trim()) {
         requestBody = {
@@ -212,6 +192,10 @@ export function Module1() {
           image_type: "base64",
           context_text: contextText.trim() || undefined,
         }
+      }
+
+      if (!requestBody) {
+        throw new Error("Missing image data")
       }
 
       const response = await fetch("/module1/api/analyze-image", {
@@ -280,7 +264,7 @@ export function Module1() {
     if (confirm('Start a new session? This will clear all current analysis data.')) {
       console.log('[Module1] Starting new session - clearing all data')
       
-      const { clearAllData } = require('@/lib/session-manager')
+      const { clearAllData } = await import('@/lib/session-manager')
       await clearAllData()
       
       clearAll()

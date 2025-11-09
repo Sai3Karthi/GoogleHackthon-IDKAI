@@ -6,10 +6,9 @@ import { ModuleLayout } from "./module-layout"
 import { LiquidButton } from "../ui/liquid-glass-button"
 import {
   saveModule4Data,
-  clearModule4Data,
-  clearFinalAnalysisData,
   setCurrentModule,
-  requireSessionId
+  requireSessionId,
+  getModule4Data
 } from "@/lib/session-manager"
 
 interface DebateMessage {
@@ -59,6 +58,7 @@ interface Module4Cache {
   enrichmentResult?: EnrichmentResult
   timestamp: number
   inputHash: string
+  enrichmentEnabled?: boolean
 }
 
 const CACHE_KEY = 'module4_debate_cache'
@@ -80,6 +80,7 @@ export function Module4Client() {
   const [debateResult, setDebateResult] = useState<DebateResult | null>(null)
   const [enrichmentResult, setEnrichmentResult] = useState<EnrichmentResult | null>(null)
   const [enrichmentItems, setEnrichmentItems] = useState<EnrichmentItem[]>([])
+  const [enrichmentEnabled, setEnrichmentEnabled] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string>("checking")
   const router = useRouter()
@@ -126,6 +127,38 @@ export function Module4Client() {
     if (debateCompleteSourceRef.current) {
       debateCompleteSourceRef.current.close()
       debateCompleteSourceRef.current = null
+    }
+  }
+
+  const handleToggleEnrichment = (enabled: boolean) => {
+    setEnrichmentEnabled(enabled)
+
+    if (!enabled) {
+      setEnrichmentResult(null)
+      setEnrichmentItems([])
+      setShowEnrichmentItems(false)
+    } else if (enrichmentItems.length > 0) {
+      setShowEnrichmentItems(true)
+    }
+
+    try {
+      saveModule4Data({
+        debateResult: debateResult ?? null,
+        enrichmentResult: enabled ? (enrichmentResult ?? null) : null,
+        enrichmentEnabled: enabled
+      })
+
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
+        const cacheData: Module4Cache = JSON.parse(cached)
+        cacheData.enrichmentEnabled = enabled
+        if (!enabled) {
+          cacheData.enrichmentResult = undefined
+        }
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
+      }
+    } catch (error) {
+      console.error('[Module4] Failed to persist enrichment preference:', error)
     }
   }
 
@@ -225,7 +258,8 @@ export function Module4Client() {
           saveToCache(refreshed, enrichmentResult ?? undefined)
           saveModule4Data({
             debateResult: refreshed,
-            enrichmentResult: enrichmentResult
+            enrichmentResult: enrichmentResult,
+            enrichmentEnabled
           })
         }
         setProcessingStep('')
@@ -268,10 +302,19 @@ export function Module4Client() {
         return
       }
 
+      const preference = typeof cacheData.enrichmentEnabled === 'boolean' ? cacheData.enrichmentEnabled : null
+      if (preference !== null) {
+        setEnrichmentEnabled(preference)
+        if (!preference) {
+          setShowEnrichmentItems(false)
+        }
+      }
+      const effectivePreference = preference !== null ? preference : enrichmentEnabled
+
       console.log('[Module4] Loading from cache:', cacheData.debateResult)
       setDebateResult(cacheData.debateResult)
       
-      if (cacheData.enrichmentResult) {
+      if (effectivePreference && cacheData.enrichmentResult) {
         setEnrichmentResult(cacheData.enrichmentResult)
         setShowEnrichmentItems(true)
       }
@@ -305,22 +348,25 @@ export function Module4Client() {
         }
       }
       
-      try {
-        const itemsUrl = appendQueryParams('/module4/api/enrichment-items', { session_id: activeSession })
-        const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
-        if (itemsResponse.ok) {
-          const itemsData = await itemsResponse.json()
-          if (itemsData.items && Array.isArray(itemsData.items)) {
-            setEnrichmentItems(itemsData.items)
+      if (effectivePreference) {
+        try {
+          const itemsUrl = appendQueryParams('/module4/api/enrichment-items', { session_id: activeSession })
+          const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
+          if (itemsResponse.ok) {
+            const itemsData = await itemsResponse.json()
+            if (itemsData.items && Array.isArray(itemsData.items)) {
+              setEnrichmentItems(itemsData.items)
+            }
           }
+        } catch (err) {
+          console.error('[Module4] Error loading enrichment items:', err)
         }
-      } catch (err) {
-        console.error('[Module4] Error loading enrichment items:', err)
       }
       
       saveModule4Data({
         debateResult: cacheData.debateResult,
-        enrichmentResult: cacheData.enrichmentResult ?? null
+        enrichmentResult: effectivePreference ? (cacheData.enrichmentResult ?? null) : null,
+        enrichmentEnabled: effectivePreference
       })
     } catch (error) {
       console.error('[Module4] Error loading cache:', error)
@@ -331,9 +377,10 @@ export function Module4Client() {
     try {
       const cacheData: Module4Cache = {
         debateResult: result,
-        enrichmentResult: enrichment || undefined,
+        enrichmentResult: enrichmentEnabled && enrichment ? enrichment : undefined,
         timestamp: Date.now(),
-        inputHash: Date.now().toString()
+        inputHash: Date.now().toString(),
+        enrichmentEnabled
       }
       localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
       console.log('[Module4] Saved to cache')
@@ -405,6 +452,20 @@ export function Module4Client() {
   }, [])
 
   useEffect(() => {
+    try {
+      const stored = getModule4Data()
+      if (stored?.enrichmentEnabled !== undefined) {
+        setEnrichmentEnabled(stored.enrichmentEnabled)
+        if (!stored.enrichmentEnabled) {
+          setShowEnrichmentItems(false)
+        }
+      }
+    } catch (err) {
+      console.error('[Module4] Failed to restore enrichment preference:', err)
+    }
+  }, [])
+
+  useEffect(() => {
     return () => {
       closeDebateStreams()
     }
@@ -452,14 +513,20 @@ export function Module4Client() {
     setError(null)
     setDebateResult(null)
     
-    // Check if we already have enrichment data (from cache or previous run)
     const hasExistingEnrichment = enrichmentResult !== null || enrichmentItems.length > 0
-    
-    // Only clear enrichment data if we don't have any
-    if (!hasExistingEnrichment) {
+    const shouldUseEnrichment = enrichmentEnabled
+    const hadCachedEnrichment = shouldUseEnrichment && hasExistingEnrichment
+
+    if (!shouldUseEnrichment) {
       setEnrichmentResult(null)
       setEnrichmentItems([])
       setShowEnrichmentItems(false)
+    } else if (!hadCachedEnrichment) {
+      setEnrichmentResult(null)
+      setEnrichmentItems([])
+      setShowEnrichmentItems(false)
+    } else if (enrichmentItems.length > 0) {
+      setShowEnrichmentItems(true)
     }
     
     setLiveDebateMessages([])
@@ -470,7 +537,8 @@ export function Module4Client() {
     lastMessageIndexRef.current = 0
     closeDebateStreams()
     setupDebateStreams()
-    let latestEnrichment: EnrichmentResult | null = enrichmentResult
+    let latestEnrichment: EnrichmentResult | null = hadCachedEnrichment ? enrichmentResult : null
+    let enrichmentWasUsed = hadCachedEnrichment
     
     try {
       console.log('[Module4] Starting complete debate process...')
@@ -541,88 +609,92 @@ export function Module4Client() {
       addDebugLog(`[DATA] Common: ${common}`)
       
       // Step 2: Enrich perspectives with web evidence
-      {
-        // Skip enrichment if we already have enrichment data
-        if (hasExistingEnrichment) {
-          setProcessingStep("Step 2/3: Using cached enrichment data (skipping web search)...")
-          console.log('[Module4] Step 2/3: Skipping enrichment, using existing data')
-          addDebugLog('[STEP 2/3] Using cached enrichment data')
-          addDebugLog('[INFO] Skipping web enrichment - already have enriched data')
-          
-          const totalLinks = enrichmentResult?.total_relevant_links || enrichmentResult?.total_links_found || enrichmentItems.length
-          addDebugLog(`[SUCCESS] Using ${totalLinks} verified web sources from cache`)
-          
-          // Keep existing enrichment items visible
-          if (enrichmentItems.length > 0) {
-            setShowEnrichmentItems(true)
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        } else {
-          setProcessingStep("Step 2/3: Enriching with web evidence (Google Search + AI verification)... This may take up to 15 minutes.")
-          console.log('[Module4] Step 2/3: Enriching perspectives with web evidence...')
-          addDebugLog('[STEP 2/3] Starting web enrichment process...')
-          addDebugLog('[INFO] This may take up to 15 minutes')
-          addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
-          
-          try {
-            const enrichUrl = appendQueryParams('/module4/api/enrich-perspectives', {
-              session_id: activeSession,
-            })
-            addDebugLog('[INFO] Calling enrichment endpoint...')
+      if (!shouldUseEnrichment) {
+        setProcessingStep("Step 2/3: Skipping web enrichment (user preference - faster debate)")
+        addDebugLog('[STEP 2/3] Enrichment disabled by user preference')
+        addDebugLog('[INFO] Proceeding directly with Module 3 perspectives')
+        await new Promise(resolve => setTimeout(resolve, 800))
+      } else if (hadCachedEnrichment) {
+        setProcessingStep("Step 2/3: Using cached enrichment data (skipping web search)...")
+        console.log('[Module4] Step 2/3: Skipping enrichment, using existing data')
+        addDebugLog('[STEP 2/3] Using cached enrichment data')
+        addDebugLog('[INFO] Skipping web enrichment - already have enriched data')
 
-            const controller = new AbortController()
-            const enrichResponse = await fetch(enrichUrl, {
-              method: "POST",
-              headers: { 'Content-Type': 'application/json' },
-              cache: 'no-store',
-              signal: controller.signal,
-              keepalive: true,
-            })
+        const cachedLinks = enrichmentResult?.total_relevant_links || enrichmentResult?.total_links_found || enrichmentItems.length
+        addDebugLog(`[SUCCESS] Using ${cachedLinks} verified web sources from cache`)
 
-            if (enrichResponse.ok) {
-              const enrichData = await enrichResponse.json()
+        enrichmentWasUsed = true
+        latestEnrichment = enrichmentResult ?? latestEnrichment
 
-              if (enrichData.status === "completed") {
-                latestEnrichment = enrichData
-                setEnrichmentResult(enrichData)
-                const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
-                addDebugLog(`[SUCCESS] Enrichment completed with ${totalLinks} verified web sources`)
-                setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
+        if (enrichmentItems.length > 0) {
+          setShowEnrichmentItems(true)
+        }
 
-                // Fetch enrichment items for display immediately
-                addDebugLog('[INFO] Fetching enrichment items for display...')
-                try {
-                  const itemsUrl = appendQueryParams('/module4/api/enrichment-items', {
-                    session_id: activeSession,
-                  })
-                  const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
-                  if (itemsResponse.ok) {
-                    const itemsData = await itemsResponse.json()
-                    if (itemsData.status === "completed" && itemsData.items.length > 0) {
-                      setEnrichmentItems(itemsData.items)
-                      setShowEnrichmentItems(true)
-                      addDebugLog(`[SUCCESS] Loaded ${itemsData.total_items} enrichment items for display`)
-                      await new Promise(resolve => setTimeout(resolve, 2000))
-                    }
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } else {
+        setProcessingStep("Step 2/3: Enriching with web evidence (Google Search + AI verification)... This may take up to 15 minutes.")
+        console.log('[Module4] Step 2/3: Enriching perspectives with web evidence...')
+        addDebugLog('[STEP 2/3] Starting web enrichment process...')
+        addDebugLog('[INFO] This may take up to 15 minutes')
+        addDebugLog('[CONFIG] Region: India (Asia) | Method: Selenium + AI verification')
+
+        try {
+          const enrichUrl = appendQueryParams('/module4/api/enrich-perspectives', {
+            session_id: activeSession,
+          })
+          addDebugLog('[INFO] Calling enrichment endpoint...')
+
+          const controller = new AbortController()
+          const enrichResponse = await fetch(enrichUrl, {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            signal: controller.signal,
+            keepalive: true,
+          })
+
+          if (enrichResponse.ok) {
+            const enrichData = await enrichResponse.json()
+
+            if (enrichData.status === "completed") {
+              latestEnrichment = enrichData
+              enrichmentWasUsed = true
+              setEnrichmentResult(enrichData)
+              const totalLinks = enrichData.total_relevant_links || enrichData.total_links_found || 0
+              addDebugLog(`[SUCCESS] Enrichment completed with ${totalLinks} verified web sources`)
+              setProcessingStep(`Step 2/3: Enrichment complete! Found ${totalLinks} verified web sources.`)
+
+              addDebugLog('[INFO] Fetching enrichment items for display...')
+              try {
+                const itemsUrl = appendQueryParams('/module4/api/enrichment-items', {
+                  session_id: activeSession,
+                })
+                const itemsResponse = await fetch(itemsUrl, { cache: 'no-store' })
+                if (itemsResponse.ok) {
+                  const itemsData = await itemsResponse.json()
+                  if (itemsData.status === "completed" && itemsData.items.length > 0) {
+                    setEnrichmentItems(itemsData.items)
+                    setShowEnrichmentItems(true)
+                    addDebugLog(`[SUCCESS] Loaded ${itemsData.total_items} enrichment items for display`)
+                    await new Promise(resolve => setTimeout(resolve, 2000))
                   }
-                } catch (err) {
-                  console.error('[Module4] Failed to fetch enrichment items:', err)
                 }
-              } else {
-                addDebugLog('[WARNING] Enrichment did not complete, proceeding with base perspectives')
+              } catch (err) {
+                console.error('[Module4] Failed to fetch enrichment items:', err)
               }
             } else {
-              addDebugLog('[WARNING] Enrichment endpoint failed, proceeding with base perspectives')
+              addDebugLog('[WARNING] Enrichment did not complete, proceeding with base perspectives')
             }
-
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          } catch (err) {
-            console.error('[Module4] Enrichment error:', err)
-            addDebugLog('[WARNING] Enrichment failed, proceeding with base perspectives')
-            setProcessingStep("Step 2/3: Web enrichment skipped, using base perspectives...")
-            await new Promise(resolve => setTimeout(resolve, 1500))
+          } else {
+            addDebugLog('[WARNING] Enrichment endpoint failed, proceeding with base perspectives')
           }
+
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } catch (err) {
+          console.error('[Module4] Enrichment error:', err)
+          addDebugLog('[WARNING] Enrichment failed, proceeding with base perspectives')
+          setProcessingStep("Step 2/3: Web enrichment skipped, using base perspectives...")
+          await new Promise(resolve => setTimeout(resolve, 1500))
         }
       }
       
@@ -641,7 +713,7 @@ export function Module4Client() {
       
       const debateUrl = appendQueryParams('/module4/api/debate', {
         session_id: activeSession,
-        use_enriched: true,
+        use_enriched: enrichmentWasUsed,
       })
 
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -731,10 +803,12 @@ export function Module4Client() {
       
       // Save to cache and session
       addDebugLog('[INFO] Saving results and cache...')
-      saveToCache(data, latestEnrichment || undefined)
+      const enrichmentPayload = enrichmentWasUsed ? (latestEnrichment ?? enrichmentResult ?? null) : null
+      saveToCache(data, enrichmentPayload || undefined)
       saveModule4Data({
         debateResult: data,
-        enrichmentResult: latestEnrichment
+        enrichmentResult: enrichmentPayload,
+        enrichmentEnabled
       })
       
       setProcessingStep("")
@@ -830,6 +904,48 @@ export function Module4Client() {
                 <div className="text-xs text-white/40 leading-relaxed">Multi-round debate with judge AI for final verdict</div>
               </div>
             </div>
+          </div>
+
+          <div className="border border-white/10 rounded-lg p-5 mb-6 bg-white/5">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6v6l4 2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                  </svg>
+                  <span className="text-sm font-medium text-white/80">Evidence Enrichment</span>
+                </div>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  When enabled, Module 4 gathers supporting web evidence before the debate. Expect higher confidence scores but runs can take up to 15 minutes. Disable it to jump straight into the debate using Module 3 perspectives only.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-start md:self-center">
+                <span className={`text-xs font-medium ${enrichmentEnabled ? 'text-cyan-300' : 'text-white/40'}`}>
+                  {enrichmentEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleEnrichment(!enrichmentEnabled)}
+                  aria-pressed={enrichmentEnabled}
+                  disabled={loading}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-200 ${
+                    enrichmentEnabled ? 'bg-cyan-500/80' : 'bg-white/20'
+                  } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                      enrichmentEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+            {!enrichmentEnabled && (
+              <p className="mt-3 text-xs text-white/40">
+                Web lookups are skipped. The debate starts immediately and relies on Module 3 clusters only.
+              </p>
+            )}
           </div>
           
           {/* Controls */}

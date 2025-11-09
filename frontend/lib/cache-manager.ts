@@ -3,16 +3,7 @@
  * Handles localStorage caching of perspectives based on input hash
  */
 
-interface CachedData {
-  perspectives: any[];
-  finalOutput: {
-    leftist: any[];
-    rightist: any[];
-    common: any[];
-  };
-  timestamp: number;
-  inputHash: string;
-}
+import type { Module3CachePayload, Perspective, PerspectiveClusters } from "./pipeline-types"
 
 const CACHE_KEY_PREFIX = 'module3_cache_';
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -36,11 +27,11 @@ export function generateInputHash(input: { topic: string; text: string }): strin
  */
 export function savePerspectivesToCache(
   inputHash: string,
-  perspectives: any[],
-  finalOutput: { leftist: any[]; rightist: any[]; common: any[] }
+  perspectives: Perspective[],
+  finalOutput: PerspectiveClusters
 ): void {
   try {
-    const cacheData: CachedData = {
+    const cacheData: Module3CachePayload = {
       perspectives,
       finalOutput,
       timestamp: Date.now(),
@@ -66,7 +57,7 @@ export function savePerspectivesToCache(
 /**
  * Load perspectives from cache
  */
-export function loadPerspectivesFromCache(inputHash: string): CachedData | null {
+export function loadPerspectivesFromCache(inputHash: string): Module3CachePayload | null {
   try {
     const cacheKey = CACHE_KEY_PREFIX + inputHash;
     const cached = localStorage.getItem(cacheKey);
@@ -76,7 +67,7 @@ export function loadPerspectivesFromCache(inputHash: string): CachedData | null 
       return null;
     }
     
-    const cacheData: CachedData = JSON.parse(cached);
+  const cacheData: Module3CachePayload = JSON.parse(cached);
     
     // Check if cache is expired
     const age = Date.now() - cacheData.timestamp;
@@ -163,7 +154,7 @@ export function cleanupExpiredCaches(): void {
       const cached = localStorage.getItem(cacheKey);
       
       if (cached) {
-        const cacheData: CachedData = JSON.parse(cached);
+  const cacheData: Module3CachePayload = JSON.parse(cached);
         const age = now - cacheData.timestamp;
         
         if (age > CACHE_EXPIRY_MS) {

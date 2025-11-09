@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -133,6 +133,10 @@ class RunPipelineRequest(BaseModel):
 
 
 class SendToModule4Request(BaseModel):
+    session_id: str = Field(..., description="Pipeline session identifier")
+
+
+class MarkFirstViewConsumedRequest(BaseModel):
     session_id: str = Field(..., description="Pipeline session identifier")
 
 
@@ -455,8 +459,9 @@ def build_storage_payload(
     *,
     final_output: Optional[Dict[str, Any]] = None,
     stage: str = "pending",
+    frontend_state: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
+    payload: Dict[str, Any] = {
         "session_id": session_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "stage": stage,
@@ -464,6 +469,9 @@ def build_storage_payload(
         "perspectives": perspectives,
         "final_output": final_output,
     }
+    if frontend_state is not None:
+        payload["frontend_state"] = frontend_state
+    return payload
 
 
 async def persist_results(
@@ -473,6 +481,20 @@ async def persist_results(
     status: str,
     include_module4: bool,
 ) -> None:
+    existing_payload: Dict[str, Any] = {}
+    try:
+        existing_result = await get_module_result(session_id, MODULE3_RESULT_NAME)
+        existing_payload = existing_result.payload or {}
+    except ModuleResultNotFoundError:
+        existing_payload = {}
+
+    if existing_payload:
+        existing_state = existing_payload.get("frontend_state") or {}
+        new_state = storage_payload.get("frontend_state") or {}
+        if existing_state or new_state:
+            merged_state = {**existing_state, **new_state}
+            storage_payload["frontend_state"] = merged_state
+
     await save_module_result(
         session_id=session_id,
         module_name=MODULE3_RESULT_NAME,
@@ -537,10 +559,61 @@ async def execute_pipeline(
 
     await update_session_status(session_id, "module3_processing")
 
+    loop = asyncio.get_running_loop()
+    last_stream_count = 0
+
+    async def _persist_streaming_snapshot(
+        snapshot: List[Dict[str, Any]],
+        stage: str = "streaming",
+    ) -> None:
+        nonlocal last_stream_count
+        storage_payload = build_storage_payload(
+            session_id,
+            module3_input,
+            snapshot,
+            final_output=None,
+            stage=stage,
+            frontend_state={"first_view_consumed": False},
+        )
+        await persist_results(
+            session_id,
+            storage_payload,
+            status="processing",
+            include_module4=False,
+        )
+        last_stream_count = len(snapshot)
+
+    def _progress_handler(
+        color_name: str,
+        batch: List[Dict[str, Any]],
+        all_perspectives: List[Dict[str, Any]],
+    ) -> None:
+        if not all_perspectives:
+            return
+
+        if len(all_perspectives) == last_stream_count:
+            return
+
+        snapshot = [dict(item) for item in all_perspectives]
+        future = asyncio.run_coroutine_threadsafe(
+            _persist_streaming_snapshot(snapshot, "streaming"),
+            loop,
+        )
+        try:
+            future.result()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Streaming persistence failed for session %s during %s batch: %s",
+                session_id,
+                color_name,
+                exc,
+            )
+
     try:
         generation_result = await asyncio.to_thread(
             api_request.generate_perspectives,
             module3_input,
+            progress_callback=_progress_handler,
         )
         base_perspectives = []
         if isinstance(generation_result, dict):
@@ -555,6 +628,7 @@ async def execute_pipeline(
             base_perspectives,
             final_output=None,
             stage="perspectives_ready",
+            frontend_state={"first_view_consumed": False},
         )
         await persist_results(
             session_id,
@@ -583,6 +657,7 @@ async def execute_pipeline(
             final_perspectives,
             final_output=final_output_payload,
             stage="completed",
+            frontend_state={"first_view_consumed": False},
         )
         await persist_results(
             session_id,
@@ -695,6 +770,7 @@ async def get_status(
     module3_available = False
     module3_stage: Optional[str] = None
     final_output_ready = False
+    first_view_consumed = False
     try:
         result = await get_module_result(resolved_session, MODULE3_RESULT_NAME)
         module3_available = True
@@ -702,6 +778,10 @@ async def get_status(
         module3_stage = payload.get("stage") if isinstance(payload, dict) else None
         final_data = payload.get("final_output") if isinstance(payload, dict) else None
         final_output_ready = isinstance(final_data, dict) and bool(final_data)
+        if isinstance(payload, dict):
+            frontend_state = payload.get("frontend_state") or {}
+            if isinstance(frontend_state, dict):
+                first_view_consumed = bool(frontend_state.get("first_view_consumed"))
     except ModuleResultNotFoundError:
         module3_available = False
 
@@ -715,6 +795,7 @@ async def get_status(
         "module3_output_available": module3_available,
         "module3_stage": module3_stage,
         "final_output_ready": final_output_ready,
+    "first_view_consumed": first_view_consumed,
         "session_running": session_running,
         "active_pipelines": active_jobs,
         "active_count": len(active_jobs),
@@ -747,13 +828,21 @@ async def get_categorized_output(
 ) -> JSONResponse:
     resolved_session = await fetch_session_or_404(session_id)
     payload = await get_module3_payload(resolved_session)
-    final_output = payload.get("final_output", {})
+    final_output = payload.get("final_output")
 
     if category not in {"leftist", "rightist", "common"}:
         raise HTTPException(status_code=400, detail="Category must be leftist, rightist, or common")
 
-    if category not in final_output:
-        raise HTTPException(status_code=404, detail=f"No data stored for category {category}")
+    if not isinstance(final_output, dict) or category not in final_output:
+        return JSONResponse(
+            {
+                "status": "pending",
+                "message": "Perspectives are still being generated",
+                "category": category,
+                "session_id": resolved_session,
+            },
+            status_code=status.HTTP_202_ACCEPTED,
+        )
 
     return JSONResponse(final_output[category])
 
@@ -819,6 +908,40 @@ async def send_stored_data_to_module4(request: SendToModule4Request) -> JSONResp
 
     await send_to_module4(resolved_session, final_output)
     return JSONResponse({"status": "sent", "session_id": resolved_session})
+
+
+@app.post("/api/mark_first_view_consumed")
+async def mark_first_view_consumed(request: MarkFirstViewConsumedRequest) -> JSONResponse:
+    resolved_session = await fetch_session_or_404(request.session_id.strip())
+
+    try:
+        result = await get_module_result(resolved_session, MODULE3_RESULT_NAME)
+    except ModuleResultNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Module 3 output not available.") from exc
+
+    payload = dict(result.payload or {})
+    frontend_state = dict(payload.get("frontend_state") or {})
+
+    if frontend_state.get("first_view_consumed") is True:
+        return JSONResponse({
+            "status": "unchanged",
+            "session_id": resolved_session,
+        })
+
+    frontend_state["first_view_consumed"] = True
+    payload["frontend_state"] = frontend_state
+
+    await save_module_result(
+        session_id=resolved_session,
+        module_name=MODULE3_RESULT_NAME,
+        payload=payload,
+        status=result.status or "completed",
+    )
+
+    return JSONResponse({
+        "status": "updated",
+        "session_id": resolved_session,
+    })
 
 
 @app.post("/api/clear")

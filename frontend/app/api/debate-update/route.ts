@@ -1,50 +1,84 @@
 import { NextResponse } from 'next/server'
 
-const listeners = new Set<(data: any) => void>()
+type DebateUpdatePayload = Record<string, unknown>
+
+interface DebateUpdateEvent extends DebateUpdatePayload {
+  type: string
+}
+
+type DebateUpdateListener = (data: DebateUpdateEvent) => void
+
+const listeners = new Set<DebateUpdateListener>()
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 export async function POST(request: Request) {
   try {
-    const payload = await request.json()
+    const rawPayload = await request.json()
+    const payload: DebateUpdatePayload = isRecord(rawPayload) ? rawPayload : {}
+    const event: DebateUpdateEvent = {
+      ...payload,
+      type: typeof payload.type === 'string' ? (payload.type as string) : 'message'
+    }
+
     listeners.forEach(listener => {
       try {
-        listener({ type: 'message', ...payload })
-      } catch (error) {
-        console.error('[debate-update] Listener error:', error)
+        listener(event)
+      } catch (listenerError) {
+        console.error('[debate-update] Listener error:', listenerError)
       }
     })
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[debate-update] POST handler failed:', error)
-    return NextResponse.json({ success: false, error: error?.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
 export async function GET() {
   const encoder = new TextEncoder()
+  let keepAlive: ReturnType<typeof setInterval> | null = null
+  let activeListener: DebateUpdateListener | null = null
 
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       console.log('[debate-update] SSE client connected')
-      const listener = (data: any) => {
+
+      const listener: DebateUpdateListener = (data) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        } catch (error) {
-          console.error('[debate-update] Failed to enqueue SSE data:', error)
+        } catch (enqueueError) {
+          console.error('[debate-update] Failed to enqueue SSE data:', enqueueError)
         }
       }
 
       listeners.add(listener)
+      activeListener = listener
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'connected' })}\n\n`))
 
-      const keepAlive = setInterval(() => {
+      keepAlive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': keepalive\n\n'))
-        } catch (error) {
-          clearInterval(keepAlive)
+        } catch (keepAliveError) {
+          if (keepAlive) {
+            clearInterval(keepAlive)
+            keepAlive = null
+          }
           listeners.delete(listener)
           console.log('[debate-update] SSE client disconnected')
         }
       }, 15000)
+    },
+    cancel() {
+      if (keepAlive) {
+        clearInterval(keepAlive)
+        keepAlive = null
+      }
+      if (activeListener) {
+        listeners.delete(activeListener)
+        activeListener = null
+      }
     }
   })
 

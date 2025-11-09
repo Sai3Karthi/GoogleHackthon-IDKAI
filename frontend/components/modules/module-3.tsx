@@ -1,7 +1,7 @@
 "use client"
 
 import { ModuleLayout } from "./module-layout"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { TextShimmer } from "@/components/ui/text-shimmer"
 import { PerspectiveCarousel } from "./module-3-carousel"
@@ -9,7 +9,6 @@ import {
   generateInputHash,
   savePerspectivesToCache,
   loadPerspectivesFromCache,
-  hasCacheForHash,
   clearCacheForHash,
   cleanupExpiredCaches
 } from "@/lib/cache-manager"
@@ -17,58 +16,59 @@ import {
   saveModule3Data,
   getModule3Data,
   setCurrentModule,
-  getModule4Data,
-  getFinalAnalysisData,
-  isPipelineCompleted,
   requireSessionId
 } from "@/lib/session-manager"
+import type { Module3Data } from "@/lib/session-manager"
+import type { Perspective, PerspectiveClusters, Module3InputMetadata } from "@/lib/pipeline-types"
 
-interface Perspective {
-  color: string
-  bias_x: number
-  significance_y: number
-  text: string
+type Module3StatusSnapshot = {
+  module3_stage?: string
+  session_running?: boolean
+  module3_output_available?: boolean
+  final_output_ready?: boolean
+  first_view_consumed?: boolean
+  [key: string]: unknown
+}
+
+const clampToPercent = (value: number) => Math.min(Math.max(value, 0), 100)
+
+const normalizeSignificanceScore = (value?: number): number | null => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null
+  }
+  const scaledValue = value > 1 ? value : value * 100
+  return clampToPercent(scaledValue)
 }
 
 export function Module3() {
-  const [inputData, setInputData] = useState<any>(null)
-  const [perspectives, setPerspectives] = useState<Perspective[]>([])
   const router = useRouter()
+
+  const [inputData, setInputData] = useState<Module3InputMetadata | null>(null)
+  const [perspectives, setPerspectives] = useState<Perspective[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   
-  const [finalOutput, setFinalOutput] = useState<{
-    leftist: Perspective[]
-    rightist: Perspective[]
-    common: Perspective[]
-  } | null>(null)
+  const [finalOutput, setFinalOutput] = useState<PerspectiveClusters | null>(null)
   const [loading, setLoading] = useState(false)
+  const [bootstrapped, setBootstrapped] = useState(false)
   
   // Lazy initialization - check for cached data before setting initial state
-  const [currentStep, setCurrentStep] = useState(() => {
-    const sessionData = getModule3Data()
-    return sessionData && sessionData.perspectives.length > 0 ? 3 : 0
-  })
+  const [currentStep, setCurrentStep] = useState(0)
+  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(true)
+  const [redirectConsumed, setRedirectConsumed] = useState(false)
   
   const [isGenerating, setIsGenerating] = useState(false)
   
-  const [showGraph, setShowGraph] = useState(() => {
-    const sessionData = getModule3Data()
-    return sessionData && sessionData.perspectives.length > 0
-  })
+  const [showGraph, setShowGraph] = useState(false)
   
   const [backendRunning, setBackendRunning] = useState(false)
-  const [startingBackend, setStartingBackend] = useState(false)
   const [currentInputHash, setCurrentInputHash] = useState<string>("")
   const [showMethodology, setShowMethodology] = useState(false)
   const [hoveredPerspective, setHoveredPerspective] = useState<Perspective | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   
-  const [showOutputGraph, setShowOutputGraph] = useState(() => {
-    const sessionData = getModule3Data()
-    return sessionData && sessionData.perspectives.length > 0
-  })
+  const [showOutputGraph, setShowOutputGraph] = useState(false)
   
   const [loadingOutputGraph, setLoadingOutputGraph] = useState(false)
   const graphRef = useRef<HTMLDivElement>(null)
@@ -77,34 +77,144 @@ export function Module3() {
   const statusPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const eventListenersAttachedRef = useRef(false)
   const finalRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shouldAutoAdvanceRef = useRef(shouldAutoAdvance)
+  const previousInputHashRef = useRef(currentInputHash)
+  const restoredFromSessionRef = useRef<boolean>(false)
+  const isBootstrappingRef = useRef(true)
+  const ignoreNextInputHashRef = useRef(false)
+  const completeBootstrapping = useCallback(() => {
+    if (isBootstrappingRef.current) {
+      isBootstrappingRef.current = false
+    }
+    setBootstrapped(true)
+  }, [])
   
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
   const [hasTriggeredRedirect, setHasTriggeredRedirect] = useState(false)
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const parseStatusSnapshot = (snapshot: any) => {
+  const significancePercentage = useMemo(
+    () => normalizeSignificanceScore(inputData?.significance_score),
+    [inputData?.significance_score]
+  )
+
+  const persistModule3Session = useCallback(
+    (updates: Partial<Module3Data>) => {
+      const existing = getModule3Data()
+      if (
+        isBootstrappingRef.current &&
+        !updates.perspectives &&
+        !updates.finalOutput &&
+        !(existing?.perspectives?.length) &&
+        !existing?.finalOutput
+      ) {
+        return
+      }
+      const hasBaseline = existing || updates.perspectives || updates.finalOutput
+      if (!hasBaseline) {
+        return
+      }
+
+      const mergedPerspectives = updates.perspectives
+        ?? (perspectives.length > 0 ? perspectives : existing?.perspectives ?? [])
+      const mergedFinalOutput = updates.finalOutput
+        ?? (finalOutput ?? existing?.finalOutput ?? null)
+      const mergedInputHash = updates.inputHash
+        ?? (currentInputHash ? currentInputHash : existing?.inputHash ?? "")
+      const mergedAutoAdvance = updates.autoAdvanceConsumed
+        ?? existing?.autoAdvanceConsumed
+        ?? redirectConsumed
+      const mergedLastStep = updates.lastStep
+        ?? existing?.lastStep
+        ?? currentStep
+      const mergedFirstViewConsumed = updates.firstViewConsumed
+        ?? existing?.firstViewConsumed
+        ?? redirectConsumed
+
+      saveModule3Data({
+        perspectives: mergedPerspectives,
+        finalOutput: mergedFinalOutput,
+        inputHash: mergedInputHash,
+        autoAdvanceConsumed: mergedAutoAdvance,
+        lastStep: mergedLastStep,
+        firstViewConsumed: mergedFirstViewConsumed,
+      })
+    },
+    [perspectives, finalOutput, currentInputHash, currentStep, redirectConsumed]
+  )
+
+  const consumeAutoAdvance = useCallback(() => {
+    if (!shouldAutoAdvanceRef.current) {
+      return
+    }
+    shouldAutoAdvanceRef.current = false
+    setShouldAutoAdvance(false)
+    setRedirectConsumed(true)
+    persistModule3Session({ autoAdvanceConsumed: true, firstViewConsumed: true, lastStep: currentStep })
+  }, [persistModule3Session, currentStep])
+
+  const acknowledgeRedirectConsumption = useCallback(async () => {
+    const session = sessionIdRef.current
+    if (!session) {
+      return
+    }
+    try {
+      await fetch('/module3/api/mark_first_view_consumed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ session_id: session })
+      })
+    } catch (error) {
+      console.error('[Module3] Failed to acknowledge redirect consumption:', error)
+    }
+  }, [])
+
+  const parseStatusSnapshot = (snapshot: Module3StatusSnapshot | null | undefined) => {
     const stage = typeof snapshot?.module3_stage === 'string' ? snapshot.module3_stage : null
     const sessionRunning = Boolean(snapshot?.session_running)
     const module3OutputAvailable = Boolean(snapshot?.module3_output_available)
     const finalOutputReady = Boolean(snapshot?.final_output_ready) || stage === 'completed'
     const perspectivesReady = stage === 'perspectives_ready'
+    const firstViewConsumed = Boolean(snapshot?.first_view_consumed)
     return {
       stage,
       sessionRunning,
       module3OutputAvailable,
       finalOutputReady,
       perspectivesReady,
+      firstViewConsumed,
     }
   }
 
-  const promoteStep = (targetStep: number) => {
-    setCurrentStep((prev) => (prev < targetStep ? targetStep : prev))
-  }
+  const promoteStep = useCallback(
+    (targetStep: number, options?: { force?: boolean }) => {
+      const forceAdvance = options?.force ?? false
+      if (!forceAdvance) {
+        if (restoredFromSessionRef.current) {
+          return
+        }
+        if (!shouldAutoAdvanceRef.current) {
+          return
+        }
+      }
+      setCurrentStep((prev) => (prev < targetStep ? targetStep : prev))
+    },
+    []
+  )
 
   const revealFinalOutput = () => {
-    promoteStep(2)
+    setLoadingOutputGraph(false)
     setShowGraph(true)
     setShowOutputGraph(true)
+    if (restoredFromSessionRef.current) {
+      return
+    }
+    promoteStep(2)
+    if (!shouldAutoAdvanceRef.current) {
+      return
+    }
     if (finalRevealTimeoutRef.current) {
       clearTimeout(finalRevealTimeoutRef.current)
     }
@@ -145,6 +255,10 @@ export function Module3() {
   }, [sessionId])
 
   useEffect(() => {
+    shouldAutoAdvanceRef.current = shouldAutoAdvance
+  }, [shouldAutoAdvance])
+
+  useEffect(() => {
     if (!sessionId) {
       return
     }
@@ -159,11 +273,66 @@ export function Module3() {
     if (sessionData && sessionData.perspectives.length > 0) {
       console.log('[Module3] CACHED DATA DETECTED - NOT CHANGING STEPS')
       console.log('[Module3] Restoring from session:', sessionData.perspectives.length, 'perspectives')
+      restoredFromSessionRef.current = true
+      const storedRedirectFlag = sessionData.firstViewConsumed
+      const storedAutoFlag = sessionData.autoAdvanceConsumed
+      const restoredRedirectConsumed = storedRedirectFlag !== undefined
+        ? Boolean(storedRedirectFlag)
+        : storedAutoFlag !== undefined
+          ? Boolean(storedAutoFlag)
+          : true
+      setRedirectConsumed(restoredRedirectConsumed)
+
+      const restoredStep = sessionData.lastStep !== undefined
+        ? sessionData.lastStep
+        : sessionData.finalOutput
+          ? 3
+          : 2
+
+      if (redirectTimerRef.current) {
+        clearInterval(redirectTimerRef.current)
+        redirectTimerRef.current = null
+      }
+      previousInputHashRef.current = sessionData.inputHash ?? previousInputHashRef.current
+      shouldAutoAdvanceRef.current = !restoredRedirectConsumed
+      setShouldAutoAdvance(!restoredRedirectConsumed)
+      setHasTriggeredRedirect(restoredRedirectConsumed)
+      if (restoredRedirectConsumed) {
+        setRedirectCountdown(null)
+      }
+      setCurrentStep(restoredStep)
+      setShowGraph(sessionData.perspectives.length > 0)
+      setShowOutputGraph(Boolean(sessionData.finalOutput))
+
+      if (!sessionData.autoAdvanceConsumed) {
+        persistModule3Session({
+          autoAdvanceConsumed: true,
+          firstViewConsumed: true,
+          lastStep: restoredStep,
+          inputHash: sessionData.inputHash,
+        })
+      } else {
+        persistModule3Session({
+          lastStep: restoredStep,
+          inputHash: sessionData.inputHash,
+          firstViewConsumed: restoredRedirectConsumed,
+        })
+      }
+
       setBackendRunning(true)
       setPerspectives(sessionData.perspectives)
       setFinalOutput(sessionData.finalOutput)
+      ignoreNextInputHashRef.current = true
       setCurrentInputHash(sessionData.inputHash)
-      fetchInputData().catch(console.error)
+      setBootstrapped(true)
+      if (!sessionData.inputHash) {
+        previousInputHashRef.current = ""
+      }
+      fetchInputData()
+        .catch(console.error)
+        .finally(() => {
+          completeBootstrapping()
+        })
       return
     }
 
@@ -179,6 +348,9 @@ export function Module3() {
             topic: input.topic,
             text: input.text
           })
+          if (isBootstrappingRef.current) {
+            ignoreNextInputHashRef.current = true
+          }
           setCurrentInputHash(hash)
 
           const cached = loadPerspectivesFromCache(hash)
@@ -189,12 +361,14 @@ export function Module3() {
             setPerspectives(cached.perspectives)
             setFinalOutput(cached.finalOutput)
             console.log('[Module3] Cache loaded successfully')
+            completeBootstrapping()
             return
           }
 
           console.log('[Module3] No cache found, checking backend status...')
           setBackendRunning(true)
           checkBackendStatusAndResume()
+          completeBootstrapping()
           return
         }
 
@@ -205,6 +379,9 @@ export function Module3() {
           topic: fallbackInput.topic,
           text: fallbackInput.text
         })
+        if (isBootstrappingRef.current) {
+          ignoreNextInputHashRef.current = true
+        }
         setCurrentInputHash(hash)
 
         const cached = loadPerspectivesFromCache(hash)
@@ -218,6 +395,7 @@ export function Module3() {
         }
 
         setBackendRunning(false)
+        completeBootstrapping()
       } catch (error) {
         console.error('Error loading input data:', error)
         setInputData(fallbackInput)
@@ -227,6 +405,9 @@ export function Module3() {
           topic: fallbackInput.topic,
           text: fallbackInput.text
         })
+        if (isBootstrappingRef.current) {
+          ignoreNextInputHashRef.current = true
+        }
         setCurrentInputHash(hash)
 
         const cached = loadPerspectivesFromCache(hash)
@@ -234,6 +415,7 @@ export function Module3() {
           setPerspectives(cached.perspectives)
           setFinalOutput(cached.finalOutput)
         }
+        completeBootstrapping()
       }
     }
 
@@ -244,8 +426,59 @@ export function Module3() {
         clearInterval(statusPollingRef.current)
         statusPollingRef.current = null
       }
+      completeBootstrapping()
     }
-  }, [sessionId])
+  }, [sessionId, completeBootstrapping])
+
+  useEffect(() => {
+    if (!currentInputHash) {
+      return
+    }
+
+    if (ignoreNextInputHashRef.current) {
+      ignoreNextInputHashRef.current = false
+      previousInputHashRef.current = currentInputHash
+      return
+    }
+
+    if (previousInputHashRef.current === currentInputHash) {
+      if (isBootstrappingRef.current) {
+        return
+      }
+      return
+    }
+
+    if (isBootstrappingRef.current) {
+      previousInputHashRef.current = currentInputHash
+      return
+    }
+
+    previousInputHashRef.current = currentInputHash
+    setShouldAutoAdvance(true)
+    shouldAutoAdvanceRef.current = true
+    setHasTriggeredRedirect(false)
+    setRedirectCountdown(null)
+    restoredFromSessionRef.current = false
+    setRedirectConsumed(false)
+    if (redirectTimerRef.current) {
+      clearInterval(redirectTimerRef.current)
+      redirectTimerRef.current = null
+    }
+    setCurrentStep(0)
+    persistModule3Session({
+      autoAdvanceConsumed: false,
+      lastStep: 0,
+      inputHash: currentInputHash,
+      firstViewConsumed: false,
+    })
+  }, [currentInputHash, persistModule3Session])
+
+  useEffect(() => {
+    if (isBootstrappingRef.current) {
+      return
+    }
+    persistModule3Session({ lastStep: currentStep })
+  }, [currentStep, persistModule3Session])
 
   // Handle ESC key for methodology modal
   useEffect(() => {
@@ -263,6 +496,7 @@ export function Module3() {
   useEffect(() => {
     const fetchFinalOutputFromBackend = async () => {
       if (currentStep === 3 && !finalOutput && perspectives.length > 0) {
+        setLoadingOutputGraph(true)
         try {
           const [leftistRes, commonRes, rightistRes] = await Promise.all([
             fetch('/module3/module3/output/leftist'),
@@ -290,6 +524,7 @@ export function Module3() {
             setFinalOutput({ leftist, rightist, common })
           }
         } catch (error) {
+          console.error('[Module3] Falling back to local clustering:', error)
           const LEFTIST_THRESHOLD = 0.428
           const RIGHTIST_THRESHOLD = 0.571
           const leftist = perspectives.filter((p: Perspective) => p.bias_x < LEFTIST_THRESHOLD)
@@ -297,7 +532,11 @@ export function Module3() {
           const common = perspectives.filter((p: Perspective) => p.bias_x >= LEFTIST_THRESHOLD && p.bias_x < RIGHTIST_THRESHOLD)
           
           setFinalOutput({ leftist, rightist, common })
+        } finally {
+          setLoadingOutputGraph(false)
         }
+      } else if (currentStep !== 3) {
+        setLoadingOutputGraph(false)
       }
     }
 
@@ -306,25 +545,42 @@ export function Module3() {
 
   // Redirect countdown to Module 4 after output is shown
   useEffect(() => {
-    const sessionData = getModule3Data()
-    const hasSessionData = sessionData && sessionData.perspectives.length > 0
-    
-    if (currentStep === 3 && finalOutput && showOutputGraph) {
-      // Only start countdown if:
-      // 1. We DON'T have session data (fresh completion)
-      // 2. AND we haven't already triggered redirect
-      if (!hasSessionData && !hasTriggeredRedirect) {
+    const sessionSnapshot = getModule3Data()
+    const storedPerspectiveCount = Array.isArray(sessionSnapshot?.perspectives)
+      ? sessionSnapshot?.perspectives.length
+      : 0
+    const hasSessionData = storedPerspectiveCount > 0
+    const storedFirstViewConsumed = Boolean(
+      sessionSnapshot?.firstViewConsumed ?? sessionSnapshot?.autoAdvanceConsumed ?? redirectConsumed
+    )
+
+    if (storedFirstViewConsumed && !redirectConsumed) {
+      setRedirectConsumed(true)
+      setHasTriggeredRedirect(true)
+      shouldAutoAdvanceRef.current = false
+      setShouldAutoAdvance(false)
+    }
+
+    if (currentStep === 3 && finalOutput && showOutputGraph && !hasTriggeredRedirect && !redirectConsumed) {
+      if (!hasSessionData && shouldAutoAdvanceRef.current) {
         console.log('[Module3] Fresh data from backend, starting countdown to Module 4')
         setHasTriggeredRedirect(true)
         startRedirectCountdown()
+      } else if (!hasSessionData) {
+        console.log('[Module3] Auto redirect skipped (auto-advance disabled)')
+        setHasTriggeredRedirect(true)
       } else {
         console.log('[Module3] Backend data loaded, but session exists - user navigated back (no redirect)')
         setHasTriggeredRedirect(true)
       }
     }
-  }, [currentStep, finalOutput, showOutputGraph, hasTriggeredRedirect])
+  }, [currentStep, finalOutput, showOutputGraph, hasTriggeredRedirect, redirectConsumed])
 
   const startRedirectCountdown = () => {
+    if (!shouldAutoAdvanceRef.current) {
+      console.log('[Module3] Auto redirect suppressed (auto-advance disabled)')
+      return
+    }
     console.log('[Module3] Starting redirect countdown from 10 seconds')
     
     if (redirectTimerRef.current) {
@@ -332,6 +588,8 @@ export function Module3() {
     }
     
     setRedirectCountdown(10)
+    consumeAutoAdvance()
+  void acknowledgeRedirectConsumption()
     
     redirectTimerRef.current = setInterval(() => {
       setRedirectCountdown((prev) => {
@@ -391,7 +649,17 @@ export function Module3() {
         module3OutputAvailable,
         sessionRunning,
         perspectivesReady,
+        firstViewConsumed,
       } = parseStatusSnapshot(snapshot)
+
+      if (firstViewConsumed && !redirectConsumed) {
+        restoredFromSessionRef.current = true
+        shouldAutoAdvanceRef.current = false
+        setShouldAutoAdvance(false)
+        setRedirectConsumed(true)
+        setHasTriggeredRedirect(true)
+        setRedirectCountdown(null)
+      }
 
       if (finalOutputReady || (module3OutputAvailable && !sessionRunning)) {
         console.log('[Module3] Stored results detected, syncing UI...')
@@ -399,7 +667,7 @@ export function Module3() {
         if (results.hasFinalOutput) {
           revealFinalOutput()
         } else if (results.hasPerspectives) {
-          promoteStep(2)
+          promoteStep(1)
         }
         setIsGenerating(false)
         setLoading(false)
@@ -411,7 +679,7 @@ export function Module3() {
         if (module3OutputAvailable || perspectivesReady) {
           const results = await loadCompletedResults()
           if (results.hasPerspectives) {
-            promoteStep(2)
+            promoteStep(1)
           } else {
             promoteStep(1)
           }
@@ -432,7 +700,7 @@ export function Module3() {
         if (results.hasFinalOutput) {
           revealFinalOutput()
         } else if (results.hasPerspectives) {
-          promoteStep(2)
+          promoteStep(1)
         } else {
           promoteStep(0)
         }
@@ -455,6 +723,7 @@ export function Module3() {
   const loadCompletedResults = async (): Promise<{ hasPerspectives: boolean; hasFinalOutput: boolean }> => {
     let hasPerspectives = false
     let hasFinalOutput = false
+    let perspectivesData: Perspective[] = []
 
     try {
       const outputResponse = await fetch(appendSessionParam("/module3/api/output"))
@@ -463,12 +732,25 @@ export function Module3() {
       }
 
       const outputData = await outputResponse.json()
-      const perspectivesData = Array.isArray(outputData.perspectives) ? outputData.perspectives : []
+      perspectivesData = Array.isArray(outputData.perspectives) ? outputData.perspectives : []
+      const frontendState = outputData && typeof outputData === 'object' ? outputData.frontend_state : null
+      const backendFirstViewConsumed = Boolean(frontendState?.first_view_consumed)
+      if (backendFirstViewConsumed && !redirectConsumed) {
+        restoredFromSessionRef.current = true
+        shouldAutoAdvanceRef.current = false
+        setShouldAutoAdvance(false)
+        setRedirectConsumed(true)
+        setHasTriggeredRedirect(true)
+        setRedirectCountdown(null)
+      }
 
       if (perspectivesData.length > 0) {
         hasPerspectives = true
         setPerspectives(perspectivesData)
         setShowGraph(true)
+        if (isBootstrappingRef.current) {
+          restoredFromSessionRef.current = true
+        }
       }
 
       let finalOutputPayload: { leftist: Perspective[]; common: Perspective[]; rightist: Perspective[] } | null = null
@@ -520,11 +802,18 @@ export function Module3() {
 
         if (currentInputHash && perspectivesData.length && hasFinalOutput) {
           savePerspectivesToCache(currentInputHash, perspectivesData, finalOutputPayload)
-          saveModule3Data({
+          const sessionUpdates: Partial<Module3Data> = {
             perspectives: perspectivesData,
             finalOutput: finalOutputPayload,
-            inputHash: currentInputHash
-          })
+            inputHash: currentInputHash,
+          }
+          if (backendFirstViewConsumed || redirectConsumed) {
+            sessionUpdates.firstViewConsumed = backendFirstViewConsumed || redirectConsumed
+          }
+          persistModule3Session(sessionUpdates)
+          if (isBootstrappingRef.current || restoredFromSessionRef.current) {
+            restoredFromSessionRef.current = true
+          }
         }
       } else {
         setFinalOutput(null)
@@ -533,6 +822,8 @@ export function Module3() {
     } catch (error) {
       console.error('[Module3] Error loading completed results:', error)
     }
+
+    setLoadingOutputGraph(hasFinalOutput ? false : perspectivesData.length > 0)
 
     return { hasPerspectives, hasFinalOutput }
   }
@@ -556,12 +847,23 @@ export function Module3() {
           finalOutputReady,
           module3OutputAvailable,
           perspectivesReady,
+          firstViewConsumed,
         } = parseStatusSnapshot(snapshot)
+
+        if (firstViewConsumed && !redirectConsumed) {
+          setRedirectConsumed(true)
+          shouldAutoAdvanceRef.current = false
+          setShouldAutoAdvance(false)
+          if (!hasTriggeredRedirect) {
+            setHasTriggeredRedirect(true)
+            setRedirectCountdown(null)
+          }
+        }
 
         if (module3OutputAvailable || perspectivesReady) {
           const results = await loadCompletedResults()
           if (results.hasPerspectives && !finalOutputReady) {
-            promoteStep(2)
+            promoteStep(1)
           }
         }
 
@@ -608,46 +910,16 @@ export function Module3() {
         if (results.hasFinalOutput) {
           revealFinalOutput()
         } else if (results.hasPerspectives) {
-          promoteStep(2)
+          promoteStep(1)
         }
       }
 
       fetchInputData()
     } catch (error) {
       setBackendRunning(false)
+        console.error('[Module3] Failed to refresh backend status:', error)
     }
   }
-
-  const startModule3 = async () => {
-    setStartingBackend(true)
-
-    try {
-      const response = await fetch('/module3/api/health')
-      
-      if (response.ok) {
-        setBackendRunning(true)
-        setStartingBackend(false)
-        setCurrentStep(1)
-        setIsGenerating(true)
-        setLoading(true)
-        setPerspectives([])
-        setFinalOutput(null)
-        setShowGraph(false)
-        setShowOutputGraph(false)
-
-        await startPerspectiveGeneration()
-      } else {
-        console.error('[Module3] Backend not responding')
-        setStartingBackend(false)
-      }
-
-    } catch (error) {
-      console.error('[Module3] Error starting module3:', error)
-      setStartingBackend(false)
-    }
-  }
-
-
 
   const fetchInputData = async () => {
     const id = sessionIdRef.current
@@ -666,6 +938,9 @@ export function Module3() {
           topic: data.topic,
           text: data.text
         })
+        if (isBootstrappingRef.current) {
+          ignoreNextInputHashRef.current = true
+        }
         setCurrentInputHash(hash)
         
         setBackendRunning(true)
@@ -673,6 +948,8 @@ export function Module3() {
     } catch (error) {
       console.error("Error fetching input data:", error)
       setBackendRunning(false)
+    } finally {
+      completeBootstrapping()
     }
   }
 
@@ -681,7 +958,25 @@ export function Module3() {
   const startPerspectiveGeneration = async () => {
     setIsGenerating(true)
     setLoading(true)
+    setLoadingOutputGraph(true)
     setPerspectives([])
+
+    if (redirectTimerRef.current) {
+      clearInterval(redirectTimerRef.current)
+      redirectTimerRef.current = null
+    }
+    setRedirectCountdown(null)
+    setHasTriggeredRedirect(false)
+    shouldAutoAdvanceRef.current = true
+    setShouldAutoAdvance(true)
+    restoredFromSessionRef.current = false
+    setRedirectConsumed(false)
+    setBootstrapped(true)
+    persistModule3Session({
+      autoAdvanceConsumed: false,
+      firstViewConsumed: false,
+      lastStep: 1,
+    })
 
     try {
       const activeSessionId = sessionIdRef.current
@@ -801,6 +1096,9 @@ export function Module3() {
             if (finalData.perspectives && Array.isArray(finalData.perspectives)) {
               const allPerspectives = finalData.perspectives
               setPerspectives(allPerspectives)
+              if (isBootstrappingRef.current) {
+                restoredFromSessionRef.current = true
+              }
               
               // Fetch clustered output from backend final_output files
               try {
@@ -825,26 +1123,17 @@ export function Module3() {
                       allPerspectives,
                       clusteredOutput
                     )
-                    saveModule3Data({
+                    persistModule3Session({
                       perspectives: allPerspectives,
                       finalOutput: clusteredOutput,
-                      inputHash: currentInputHash
+                      inputHash: currentInputHash,
                     })
                   }
                 }
               } catch (error) {
                 console.error('[Module3] Error fetching final output from backend:', error)
               }
-              
-              // Move to Step 2 (Visualisation) and show graph
-              setCurrentStep(2)
-              setShowGraph(true)
-              
-              // Auto-advance to step 3 after showing graph (only during fresh generation)
-              setTimeout(() => {
-                setCurrentStep(3)
-                setShowOutputGraph(true)
-              }, 3000)
+              revealFinalOutput()
             }
           }
         }
@@ -913,6 +1202,21 @@ export function Module3() {
     )
   }
 
+  if (!bootstrapped) {
+    return (
+      <ModuleLayout
+        moduleNumber={3}
+        title="Perspective Generation"
+        description="AI generates multiple perspectives from various viewpoints, then two agents debate them to analyze the overall standing of information"
+  status="ready"
+      >
+        <div className="border border-white/10 rounded p-6 text-sm text-white/60">
+          Restoring your Module 3 state…
+        </div>
+      </ModuleLayout>
+    )
+  }
+
   return (
     <ModuleLayout
       moduleNumber={3}
@@ -945,6 +1249,15 @@ export function Module3() {
                   </div>
                 </div>
               )}
+              {!isGenerating && loading && (
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <div>
+                    <span className="text-sm text-white/70">Synchronizing</span>
+                    <p className="text-xs text-white/40">Updating Module 3 results…</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -966,7 +1279,28 @@ export function Module3() {
                     setCurrentStep(0)
                     setShowGraph(false)
                     setShowOutputGraph(false)
+                    if (redirectTimerRef.current) {
+                      clearInterval(redirectTimerRef.current)
+                      redirectTimerRef.current = null
+                    }
+                    setRedirectCountdown(null)
+                    setHasTriggeredRedirect(false)
+                    shouldAutoAdvanceRef.current = true
+                    setShouldAutoAdvance(true)
+                    restoredFromSessionRef.current = false
+                    setRedirectConsumed(false)
+                    setBootstrapped(true)
+                    persistModule3Session({
+                      perspectives: [],
+                      finalOutput: null,
+                      autoAdvanceConsumed: false,
+                      lastStep: 0,
+                      inputHash: currentInputHash,
+                      firstViewConsumed: false,
+                    })
                     if (backendRunning) {
+                      void startPerspectiveGeneration()
+                    } else {
                       checkBackendStatusAndResume()
                     }
                   }
@@ -1062,11 +1396,13 @@ export function Module3() {
                   <div>
                     <div className="text-xs text-white/40 mb-2">Significance Score</div>
                     <div className="flex items-center gap-3">
-                      <div className="text-white text-2xl font-light">{inputData.significance_score}</div>
+                      <div className="text-white text-2xl font-light">
+                        {significancePercentage !== null ? `${significancePercentage.toFixed(0)}%` : 'Pending'}
+                      </div>
                       <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-white transition-all duration-1000 ease-out"
-                          style={{ width: `${inputData.significance_score * 100}%` }}
+                          style={{ width: `${significancePercentage ?? 0}%` }}
                         />
                       </div>
                     </div>

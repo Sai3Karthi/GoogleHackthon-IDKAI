@@ -3,32 +3,42 @@
  * Manages session state across all modules with localStorage
  */
 
+import type {
+  AnalysisResult,
+  Module2Output,
+  ModuleAnalysisMode,
+  Perspective,
+  PerspectiveClusters,
+  DebateResult,
+  EnrichmentResult
+} from "./pipeline-types"
+
 export interface Module1Data {
   input: string
-  analysisMode: "text" | "image"
-  result: any | null
+  analysisMode: ModuleAnalysisMode
+  result: AnalysisResult | null
   timestamp: number
 }
 
 export interface Module2Data {
-  output: any | null
+  output: Module2Output | null
   timestamp: number
 }
 
 export interface Module3Data {
-  perspectives: any[]
-  finalOutput: {
-    leftist: any[]
-    rightist: any[]
-    common: any[]
-  } | null
+  perspectives: Perspective[]
+  finalOutput: PerspectiveClusters | null
   inputHash: string
+  autoAdvanceConsumed?: boolean
+  lastStep?: number
+  firstViewConsumed?: boolean
   timestamp: number
 }
 
 export interface Module4Data {
-  debateResult: any | null
-  enrichmentResult?: any | null
+  debateResult: DebateResult | null
+  enrichmentResult?: EnrichmentResult | null
+  enrichmentEnabled?: boolean
   timestamp: number
 }
 
@@ -74,7 +84,7 @@ export function getSession(): SessionData | null {
     }
 
     return session
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Session] Error loading session:', error)
     return null
   }
@@ -95,7 +105,7 @@ export function createSession(currentModule: number = 1, sessionId: string | nul
     localStorage.setItem(SESSION_KEY, JSON.stringify(session))
     console.log('[Session] New session created:', session.sessionId ?? 'pending')
     return session
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Session] Error creating session:', error)
     return session
   }
@@ -119,7 +129,7 @@ export function updateSession(updates: Partial<SessionData>): void {
 
     localStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession))
     console.log('[Session] Session updated')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Session] Error updating session:', error)
   }
 }
@@ -191,10 +201,29 @@ export function getModule2Data(): Module2Data | null {
 /**
  * Save Module 3 data
  */
-export function saveModule3Data(data: Omit<Module3Data, 'timestamp'>): void {
+export function saveModule3Data(data: Partial<Omit<Module3Data, 'timestamp'>>): void {
+  const existing = getModule3Data()
+
+  const mergedPerspectives = data.perspectives ?? existing?.perspectives ?? []
+  const mergedFinalOutput = data.finalOutput ?? existing?.finalOutput ?? null
+  const mergedInputHash = data.inputHash ?? existing?.inputHash ?? ""
+  const mergedAutoAdvanceConsumed = data.autoAdvanceConsumed ?? existing?.autoAdvanceConsumed ?? false
+  const mergedLastStep = data.lastStep ?? existing?.lastStep ?? 0
+  const mergedFirstViewConsumed = data.firstViewConsumed ?? existing?.firstViewConsumed ?? false
+
+  // Avoid creating empty records when no historical data and no new data provided
+  if (!existing && mergedPerspectives.length === 0 && !mergedFinalOutput) {
+    return
+  }
+
   updateSession({
     module3: {
-      ...data,
+      perspectives: mergedPerspectives,
+      finalOutput: mergedFinalOutput,
+      inputHash: mergedInputHash,
+      autoAdvanceConsumed: mergedAutoAdvanceConsumed,
+      lastStep: mergedLastStep,
+      firstViewConsumed: mergedFirstViewConsumed,
       timestamp: Date.now()
     },
     currentModule: 3
@@ -213,13 +242,17 @@ export function getModule3Data(): Module3Data | null {
  * Save Module 4 data
  */
 export function saveModule4Data(data: {
-  debateResult: any | null
-  enrichmentResult?: any | null
+  debateResult: DebateResult | null
+  enrichmentResult?: EnrichmentResult | null
+  enrichmentEnabled?: boolean
 }): void {
+  const previous = getModule4Data()
+  const preference = data.enrichmentEnabled ?? previous?.enrichmentEnabled ?? true
   updateSession({
     module4: {
       debateResult: data.debateResult,
       enrichmentResult: data.enrichmentResult ?? null,
+      enrichmentEnabled: preference,
       timestamp: Date.now()
     },
     currentModule: 4
@@ -299,7 +332,7 @@ export function clearSession(): void {
   try {
     localStorage.removeItem(SESSION_KEY)
     console.log('[Session] Session cleared')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Session] Error clearing session:', error)
   }
 }
@@ -331,20 +364,20 @@ export async function clearAllData(): Promise<void> {
       try {
         await fetch(`/module3/api/clear?session_id=${encodedId}`, { method: 'POST' })
         console.log('[Session] Module 3 backend cleared')
-      } catch (err) {
+      } catch (err: unknown) {
         console.warn('[Session] Failed to clear Module 3 backend:', err)
       }
 
       try {
         await fetch(`/module4/api/clear?session_id=${encodedId}`, { method: 'POST' })
         console.log('[Session] Module 4 backend cleared')
-      } catch (err) {
+      } catch (err: unknown) {
         console.warn('[Session] Failed to clear Module 4 backend:', err)
       }
     }
     
     console.log('[Session] All data cleared - ready for new session')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Session] Error clearing all data:', error)
   }
 }

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { spawn, execSync } from 'child_process'
+import type { ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs'
 
-let backendProcess: any = null
+let backendProcess: ChildProcess | null = null
 
 const BACKEND_PORT = 8002
 const MAX_STARTUP_WAIT = 15000
@@ -227,11 +228,12 @@ export async function POST() {
       port: BACKEND_PORT
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     backendProcess = null
+    const message = error instanceof Error ? error.message : 'Unexpected error occurred'
     return NextResponse.json({ 
       success: false, 
-      error: error.message || 'Unexpected error occurred'
+      error: message
     }, { status: 500 })
   }
 }
@@ -248,8 +250,9 @@ export async function DELETE() {
       return NextResponse.json({ success: true, message: 'Backend stopped successfully' })
     }
     return NextResponse.json({ success: true, message: 'Backend is not running' })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to stop backend'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -273,8 +276,9 @@ export async function GET() {
       portInUse,
       port: BACKEND_PORT
     })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to inspect backend state'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
 
@@ -306,7 +310,8 @@ export async function PATCH() {
       success: true,
       message: `Port ${BACKEND_PORT} is now available.`
     })
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to reset backend port'
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
