@@ -176,6 +176,7 @@ class Module3Input(BaseModel):
     topic: str
     text: str
     significance_score: float
+    comprehensive_summary: str  # NEW: Pass comprehensive summary to Module3
 
 
 class ProcessRequest(BaseModel):
@@ -316,6 +317,7 @@ def prepare_module3_input(
         topic=topic,
         text=original_text,
         significance_score=significance_score / 100.0,
+        comprehensive_summary=summary_text,  # Pass full summary to preserve verification request context
     )
 
 

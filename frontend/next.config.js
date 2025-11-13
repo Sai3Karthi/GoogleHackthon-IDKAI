@@ -60,6 +60,16 @@ const loadConfigSafe = () => {
 const config = loadConfigSafe();
 
 function resolveOrchestratorUrl() {
+  // Check if USE_LOCAL_ORCHESTRATOR flag is set
+  const useLocal = process.env.USE_LOCAL_ORCHESTRATOR === 'true';
+  
+  if (useLocal) {
+    // Force local orchestrator
+    const localUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    console.log(`[Next.js Config] USE_LOCAL_ORCHESTRATOR=true, using: ${localUrl}`);
+    return localUrl.replace(/\/+$/, '');
+  }
+  
   const envFallbacks = [
     process.env.NEXT_PUBLIC_API_URL,
     process.env.ORCHESTRATOR_SERVICE_URL,

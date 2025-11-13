@@ -97,19 +97,35 @@ async def gemini_analyze_content(text: str, url: str = None) -> Dict[str, Any]:
         return None
     
     try:
-        prompt = f"""Analyze this content for potential scams, phishing, fraud, or malicious intent.
+        prompt = f"""You are analyzing content to assess threats and determine if verification is needed.
 
 Content: {text[:3000]}
 URL: {url if url else "N/A"}
 
+CRITICAL INSTRUCTION - Distinguish Between:
+
+1. VERIFICATION REQUEST: User is asking questions or seeking truth
+   - Contains: "is this", "is it", "did this", "really?", "true?", "verify", "fact check", "could it be", "or is it"
+   - User uncertainty: "not sure", "heard that", "someone said", "claims that"
+   - RESPONSE: Set confidence to maximum 0.70 (verification/debate needed to determine truth)
+
+2. THREAT CONTENT: Actual malicious content regardless of how it's presented
+   - Confirmed phishing links, scam patterns, malware distribution
+   - RESPONSE: High confidence appropriate if evidence is clear
+
+ANALYSIS FRAMEWORK:
+- If content shows USER QUESTIONING or seeking verification → confidence max 0.70
+- If content shows CONFIRMED THREATS (phishing URLs, scam language) → high confidence appropriate
+- Focus on WHAT IS VERIFIABLE vs WHAT NEEDS INVESTIGATION
+
 Provide a JSON response with:
 1. risk_level: "safe", "suspicious", or "dangerous"
-2. confidence: float between 0 and 1
+2. confidence: float between 0 and 1 (max 0.70 if verification request detected)
 3. threats: array of specific threat types detected
 4. explanation: brief user-friendly explanation (1-2 sentences)
-5. reasoning: detailed analysis of why this is flagged
+5. reasoning: detailed analysis including whether this is a verification request or confirmed threat
 
-Focus on:
+Threat categories to detect:
 - Financial scams (crypto, investment fraud, get-rich-quick schemes)
 - Phishing attempts (credential theft, fake login pages)
 - Social engineering (urgency tactics, fear-based manipulation)
@@ -154,15 +170,20 @@ async def gemini_analyze_image(
     """
     Use Gemini 2.5 Flash Vision for multimodal image analysis.
     Detects scam patterns in images: fake screenshots, QR codes, manipulated images.
+    
+    CRITICAL: context_text is USER'S QUESTION/QUERY, not part of the content being analyzed.
     """
     if not GEMINI_API_KEY:
         logger.warning("Gemini API key not configured, skipping image analysis")
         return None
     
     try:
-        prompt = """Analyze this image for potential scams, fraud, or malicious content.
+        prompt = """You are analyzing an image to assess threats and determine if verification is needed.
 
-Look for:
+CRITICAL INSTRUCTION: 
+The user may provide additional context below. This context is the USER'S QUESTION OR QUERY about the image, NOT part of the information itself.
+
+Analyze the IMAGE for:
 1. Fake payment confirmations or bank transfer screenshots
 2. Manipulated/photoshopped images (fake celebrity endorsements, edited IDs)
 3. Phishing QR codes or fake payment QR codes
@@ -174,21 +195,33 @@ Look for:
 9. Lottery/prize notification graphics
 10. Fake trading platform screenshots
 
-Also extract any text visible in the image (OCR) and analyze it for scam language.
+Extract any text visible in the image (OCR) and analyze it for scam language.
+
+RESPONSE GUIDELINES:
+
+If user context contains QUESTIONS or VERIFICATION REQUESTS:
+- Phrases like: "is this", "could this be", "or is it", "true?", "fake?", "verify", "claims that"
+- User is ASKING for verification, NOT making assertions
+- Set confidence to maximum 0.70 (requires debate/verification to determine truth)
+- Focus on what's UNCERTAIN vs what's CONFIRMED in the image
+
+If image shows CONFIRMED THREATS regardless of user context:
+- Clear phishing QR codes, obvious fake screenshots, confirmed malware
+- High confidence appropriate if evidence in image is definitive
 
 Provide a JSON response with:
 1. risk_level: "safe", "suspicious", or "dangerous"
-2. confidence: float between 0 and 1
+2. confidence: float between 0 and 1 (max 0.70 if user is asking questions)
 3. threats: array of specific visual threats detected
 4. explanation: brief user-friendly explanation
-5. reasoning: detailed analysis of visual elements
+5. reasoning: detailed analysis of visual elements and whether verification is needed
 6. extracted_text: any text found in the image (OCR)
 7. visual_elements: list of suspicious visual elements detected
 
 Respond ONLY with valid JSON, no markdown formatting."""
         
         if context_text:
-            prompt += f"\n\nAdditional context provided by user: {context_text[:500]}"
+            prompt += f"\n\nUSER'S QUESTION/CONTEXT (this is what the user is ASKING about the image): {context_text[:500]}"
         if url:
             prompt += f"\n\nSource URL: {url}"
 

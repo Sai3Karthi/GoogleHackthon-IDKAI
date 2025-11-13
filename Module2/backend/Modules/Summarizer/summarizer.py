@@ -34,22 +34,53 @@ class ComprehensiveSummarizer:
     
     def _create_summarization_prompt(self, text: str) -> str:
         prompt = f"""
-You are an expert information analyst tasked with creating a clear, comprehensive explanation of the provided information.
+You are an expert information analyst for IDK-AI, a platform that helps users verify questionable information through debate and analysis.
 
-INPUT TEXT TO ANALYZE:
+INPUT TO ANALYZE:
 "{text}"
 
-INSTRUCTIONS:
-- Create a single, clear explanation that captures ALL the information
-- NO information should be lost or omitted
-- Write in paragraph form - NO bullet points, lists, or subtopics
-- Provide context and explain complex concepts clearly
-- Make it flow naturally as a cohesive explanation
-- Ensure the summary is professional and well-written
+YOUR TASK:
+Create a comprehensive, neutral summary that captures ALL information while preserving the nature of the content (whether it's an assertion, a question, or a verification request).
+
+CRITICAL RULES FOR CONTEXT PRESERVATION:
+
+1. IDENTIFY THE INPUT TYPE FIRST:
+   A. USER VERIFICATION REQUEST: The user is ASKING if something is true/false
+      - Indicators: "I asked if...", "Is this true?", "Could this be...", "Verify whether...", "Check if...", "I want to know if..."
+   B. THIRD-PARTY ASSERTION: Someone else made a claim (the user is presenting someone else's content for verification)
+   C. DIRECT ASSERTION: User is making a claim themselves
+
+2. FOR USER VERIFICATION REQUESTS (Type A) - MOST IMPORTANT:
+   - The INPUT ITSELF is a question from the user
+   - START with: "The user is questioning whether..." or "The user requests verification of..." or "The user asks if..."
+   - DO NOT describe the underlying content as if the user is asserting it
+   - Focus on WHAT THE USER IS QUESTIONING, not what someone else claimed
+   - Example WRONG: "Dhruv Rathee posted on Twitter criticizing a classroom as fake..."
+   - Example CORRECT: "The user is questioning whether Dhruv Rathee's claim about a classroom being a PR stunt is accurate, or if it could be propaganda. They request verification of whether the scene is genuinely staged or simply an exhibition that was visited."
+
+3. FOR THIRD-PARTY ASSERTIONS (Type B):
+   - Clearly attribute claims to the source
+   - Present objectively: "A social media post by [person] claims that..."
+   - Include that this is being submitted for verification
+
+4. FOR DIRECT ASSERTIONS (Type C):
+   - Summarize the claim neutrally
+   - Maintain objectivity for debate analysis
+
+5. NEUTRAL STANCE ALWAYS:
+   - Never conclude truth or falsity
+   - Present information objectively for debate analysis
+   - Distinguish between what is shown/stated vs what is being questioned
+
+6. COMPREHENSIVE COVERAGE:
+   - NO information should be lost or omitted
+   - Capture ALL context: user's question + underlying content + any additional details
+   - Write in clear, flowing paragraph form (NO bullet points or lists)
+   - Explain complex concepts clearly for non-expert audiences
 
 REQUIRED OUTPUT FORMAT (JSON):
 {{
-    "comprehensive_summary": "<single clear explanation covering all information in paragraph form>"
+    "comprehensive_summary": "<single clear explanation that STARTS with the user's verification request if Type A, then provides context about what they're questioning>"
 }}
 
 Ensure your response is valid JSON format with only the comprehensive_summary field.

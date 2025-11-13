@@ -35,17 +35,17 @@ class FakeNewsDetector:
         self.model = genai.GenerativeModel(model_name)
         
         self.categories = {
-            "Person": "Information that requires verification through personal sources, biographical records, individual statements, or personal achievements. Needs checking with the person themselves, family, or official personal records",
-            "Organization": "Information that requires verification through organizational sources, company statements, official organizational records, institutional announcements, or corporate communications",
-            "Social": "Information that requires verification through social news sources, community reports, social media verification, public event coverage, or social trend analysis",
-            "Critical": "Information that requires verification through critical/emergency news sources, official emergency services, government alerts, security agencies, or crisis management authorities",
-            "STEM": "Information that can be immediately verified as true or false using established facts, sports history, scientific rules, mathematical principles, historical records, or objective data that doesn't require external news verification"
+            "Person": "Information about individuals, public figures, personal claims, biographical disputes, or individual behavior that requires verification through personal sources, witnesses, or credible reporting on individuals",
+            "Organization": "Information about organizations, companies, institutions, corporate claims, organizational behavior, business practices, or institutional credibility that requires verification through official channels, investigative journalism, or organizational fact-checking",
+            "Social": "Information spread through social channels, viral content, community claims, public sentiment, social movements, trending misinformation, or socially-circulated content that requires verification through social news sources, fact-checking organizations, or social media verification",
+            "Critical": "Information with immediate safety, security, emergency, or public threat implications that requires urgent verification through emergency services, security agencies, government officials, or crisis management authorities",
+            "STEM": "Information that can be IMMEDIATELY fact-checked as objectively true or false using established scientific laws, mathematical principles, or indisputable historical records WITHOUT requiring opinion, interpretation, or external verification. Only use STEM if the claim has NO debate value and can be instantly confirmed or refuted. Example: '2+2=5' is STEM (immediately false). Example: 'This classroom might be fake for PR' is NOT STEM (requires investigation and verification)"
         }
     
     def _create_classification_prompt(self, text: str) -> str:
 
         prompt = f"""
-You are an expert fake news detection classifier. Analyze the following news/information and classify it based on what type of verification would be needed to confirm if it's true or false.
+You are an expert fake news detection classifier analyzing content for IDK-AI, a platform that helps users verify questionable information through multi-perspective debate.
 
 VERIFICATION CATEGORIES:
 1. Person: {self.categories['Person']}
@@ -54,19 +54,35 @@ VERIFICATION CATEGORIES:
 4. Critical: {self.categories['Critical']}
 5. STEM: {self.categories['STEM']}
 
-NEWS/INFORMATION TO CLASSIFY:
+CONTENT TO ANALYZE:
 "{text}"
 
-INSTRUCTIONS:
-- Think: "What type of source would I need to verify if this information is true or false?"
+CRITICAL INSTRUCTIONS FOR VERIFICATION REQUEST DETECTION:
+
+IF THE USER IS ASKING A QUESTION (verification request patterns):
+- Contains phrases like: "is this real?", "could this be?", "is this fake?", "verify if...", "check if...", "is this true?"
+- The user is REQUESTING VERIFICATION, not making an assertion
+- In this case, classify based on WHO/WHAT sources should verify it:
+  * Person: If it involves an individual's behavior, claims, or actions
+  * Organization: If it involves organizational behavior, institutional claims, or corporate actions  
+  * Social: If it's viral content, social media spread, or community-circulated information
+  * Critical: If it has safety, security, or emergency implications
+  * STEM: ONLY if it's an objectively false scientific/mathematical claim with NO debate value (very rare for questions)
+
+DO NOT classify verification requests as STEM just because the topic involves facts or events. Verification requests about factual matters still require investigation and debate.
+
+EXAMPLES:
+- "Is this classroom image fake PR?" → Organization: 60%, Social: 30%, Person: 10% (requires institutional investigation)
+- "Could this politician have faked this photo?" → Person: 50%, Social: 30%, Organization: 20%
+- "Is 2+2=5?" → STEM: 100% (immediately false, no verification needed)
+- "Did this company stage this event?" → Organization: 70%, Social: 20%, Person: 10%
+
+CLASSIFICATION LOGIC:
+- Think: "What type of verification source would be most reliable for confirming or refuting this?"
 - Assign percentage values (0-100) for each verification category
 - Percentages MUST sum to exactly 100%
-- STEM = Information that can be verified immediately using facts, sports records, historical data, rules, etc.
-- Person = Needs verification from individual sources or personal records
-- Organization = Needs verification from company/institutional sources
-- Social = Needs verification from social news/community sources
-- Critical = Needs verification from emergency/security authorities
-- Consider what verification method would be MOST reliable for this specific information
+- Higher percentages = that verification method is more critical for this content
+- Consider the nature of the claim and what investigation methods would be needed
 - Provide confidence score (0-100) for overall classification accuracy
 - Include brief reasoning for your classification
 
@@ -78,7 +94,7 @@ REQUIRED OUTPUT FORMAT (JSON):
     "critical": <percentage as float>,
     "stem": <percentage as float>,
     "confidence_score": <confidence as float>,
-    "reasoning": "<brief explanation of verification method logic>"
+    "reasoning": "<brief explanation of why these verification methods are most appropriate>"
 }}
 
 Ensure your response is valid JSON and percentages sum to 100%.

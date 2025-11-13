@@ -738,8 +738,8 @@ async def get_enrichment_items(
 async def start_debate(
     session_id: str = Query(..., description="Pipeline session identifier"),
     use_enriched: bool = Query(True),
-    max_rounds: int = Query(3, ge=1, le=5),
-    min_rounds: int = Query(1, ge=1, le=3),
+    max_rounds: int = Query(7, ge=1, le=10),
+    min_rounds: int = Query(6, ge=1, le=9),
 ) -> Dict[str, Any]:
     resolved = await resolve_session_id(session_id)
     categories, metadata = await load_module4_input_data(resolved)

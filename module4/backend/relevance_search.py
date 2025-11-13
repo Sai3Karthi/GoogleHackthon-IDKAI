@@ -406,7 +406,7 @@ class RelevanceSearchSystem:
 
         self.search_engine_id = os.getenv("SEARCH_ENGINE_ID", self.config.get("search_engine_id", ""))
 
-        self.links_per_text = max(1, int(self.config.get("links_per_text", 3)))
+        self.links_per_text = max(1, int(self.config.get("links_per_text", 5)))
         self.max_retries = max(1, int(self.config.get("rate_limiting", {}).get("max_retries", 3)))
 
         gemini_settings = self.config.get("gemini_settings", {})
@@ -534,16 +534,32 @@ class RelevanceSearchSystem:
             return original_text
 
         prompt = (
-            "Rephrase this search query to relate it to the topic, preserving meaning and sentiment.\n\n"
-            f"TOPIC: {self.topic}\n"
-            f"ORIGINAL: {original_text}\n\n"
-            "Rules:\n"
-            "1. Keep core meaning unchanged\n"
-            "2. Connect naturally to topic\n"
-            "3. More specific for better search\n"
-            "4. Concise (under 100 words)\n"
-            "5. Preserve political stance\n\n"
-            "Respond ONLY with rephrased text."
+            "Extract the MAIN PHYSICAL INCIDENT/EVENT that is being questioned or criticized.\n\n"
+            f"CONTEXT/SUMMARY: {self.context_text if self.context_text else self.topic}\n\n"
+            f"PERSPECTIVE: {original_text}\n\n"
+            "Instructions:\n"
+            "1. Look for the CONCRETE EVENT/OBJECT being discussed (classroom, product launch, policy rollout, etc.)\n"
+            "2. Identify WHO is involved (government, company, organization)\n"
+            "3. Identify WHERE it happened (location/country if mentioned)\n"
+            "4. Identify the KEY CONTROVERSY (fake, staged, misleading, fraud, etc.)\n"
+            "5. Create search query with ONLY these elements - NO commentator names\n\n"
+            "What to EXCLUDE:\n"
+            "- Names of critics/commentators (journalists, YouTubers, activists)\n"
+            "- Opinion words (the search should find facts, not opinions)\n\n"
+            "What to INCLUDE:\n"
+            "- Subject organization/government (Modi, BJP, Company name)\n"
+            "- Physical subject (classroom, product, event, policy)\n"
+            "- Location (Gujarat, India, City name)\n"
+            "- Controversy keywords (fake, staged, cardboard, fraud)\n\n"
+            "Examples:\n"
+            "Context: 'Critic says Modi government showed fake classroom with cardboard walls in Gujarat'\n"
+            "→ Query: 'Modi BJP classroom cardboard fake Gujarat staged'\n\n"
+            "Context: 'Whistleblower reveals company product launch was staged'\n"
+            "→ Query: 'Company name product launch staged fake controversy'\n\n"
+            "Context: 'Activist questions authenticity of government school photos'\n"
+            "→ Query: 'Government school photos fake staged authenticity controversy'\n\n"
+            "Keep it 8-12 words focusing on THE THING BEING QUESTIONED.\n\n"
+            "Respond ONLY with the search query, nothing else."
         )
 
         for attempt in range(self.max_retries):
@@ -557,6 +573,7 @@ class RelevanceSearchSystem:
                 result = (response.text or original_text).strip()
                 if not result:
                     result = original_text
+                print(f"[SEARCH QUERY] Generated: '{result}'")
                 with _REPHRASE_LOCK:
                     self._rephrase_cache[cache_key] = result
                 return result
@@ -621,13 +638,27 @@ class RelevanceSearchSystem:
             return result
 
         prompt = (
-            "Determine if this search result is relevant to the perspective text.\n\n"
-            f"PERSPECTIVE: {original_text}\n"
-            f"TOPIC: {self.topic}\n\n"
+            "Is this article SPECIFICALLY about the incident being discussed?\n\n"
+            f"INCIDENT: {self.context_text if self.context_text else self.topic}\n\n"
             "SEARCH RESULT:\n"
             f"Title: {link_data.get('title', '')}\n"
             f"Snippet: {link_data.get('snippet', '')}\n\n"
-            "Is this search result relevant and supportive of the perspective?\n"
+            "We need content SPECIFICALLY about THIS INCIDENT:\n\n"
+            "ACCEPT:\n"
+            "- News reports about the incident\n"
+            "- Opinion pieces/commentary ABOUT THIS SPECIFIC INCIDENT\n"
+            "- Fact-checks of this specific incident\n"
+            "- Social media posts/discussions ABOUT THIS SPECIFIC INCIDENT\n"
+            "- Analysis/criticism of this specific incident\n"
+            "- Photos/videos of the actual incident\n"
+            "- Official statements about the incident\n\n"
+            "REJECT:\n"
+            "- Generic articles about the person/organization (not this incident)\n"
+            "- Unrelated incidents or topics\n"
+            "- General policy documents\n"
+            "- Articles where this incident is not the main focus\n"
+            "- Random political discussions that don't mention this incident\n\n"
+            "Key question: Does the title/snippet indicate this article is SPECIFICALLY discussing the incident in question?\n\n"
             "Respond in JSON format:\n"
             "{\"relevant\": true/false, \"confidence\": 0.0-1.0, \"reason\": \"brief explanation\"}"
         )

@@ -314,14 +314,21 @@ def should_skip_to_final_output(risk_level: str, confidence: float, threats: Lis
     
     Skip conditions:
     1. Dangerous content with very high confidence (>= 0.95)
-    2. Multiple critical threats detected with high confidence
+    2. Multiple critical threats detected with very high confidence
     3. AI-generated fake image detected with very high confidence
+    
+    NEVER SKIP if confidence <= 0.70 (indicates verification request or uncertainty)
     
     Returns: (should_skip: bool, reason: str)
     """
-    if risk_level == "dangerous" and confidence >= 0.85:
+    # If confidence is 70% or below, this indicates uncertainty or verification request
+    # Always send to debate pipeline
+    if confidence <= 0.70:
+        return False, ""
+    
+    if risk_level == "dangerous" and confidence >= 0.90:
         if len(threats) >= 3:
-            return True, "Multiple critical threats detected with high confidence. No debate needed."
+            return True, "Multiple critical threats detected with very high confidence. No debate needed."
         
         critical_threats = [
             "phishing", "malware", "financial_scam", "social_engineering",
@@ -333,10 +340,10 @@ def should_skip_to_final_output(risk_level: str, confidence: float, threats: Lis
         if len(detected_critical) >= 2:
             return True, f"Critical threats detected: {', '.join(detected_critical)}. Obvious scam/fake content."
     
-    if input_type == "image" and confidence >= 0.90:
+    if input_type == "image" and confidence >= 0.95:
         fake_image_indicators = ["manipulated_image", "deepfake", "fake_screenshot", "photoshopped"]
         if any(threat in threats for threat in fake_image_indicators):
-            return True, "AI-generated or manipulated image detected with high confidence."
+            return True, "AI-generated or manipulated image detected with very high confidence."
     
     return False, ""
 

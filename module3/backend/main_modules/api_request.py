@@ -104,7 +104,18 @@ def load_config() -> Dict[str, Any]:
         return json.load(config_file)
 
 
-def _extract_statement_and_significance(payload: Dict[str, Any]) -> Tuple[str, float]:
+def _extract_statement_and_significance(payload: Dict[str, Any]) -> Tuple[str, float, Optional[str]]:
+    """Extract statement, significance score, and comprehensive summary from payload.
+    
+    Args:
+        payload: Input payload from Module 2
+        
+    Returns:
+        Tuple of (statement, significance, comprehensive_summary)
+        
+    Raises:
+        ValueError: If payload is missing required text/topic
+    """
     statement = (
         payload.get("text")
         or payload.get("input")
@@ -114,6 +125,9 @@ def _extract_statement_and_significance(payload: Dict[str, Any]) -> Tuple[str, f
     statement = statement.strip()
     if not statement:
         raise ValueError("Input payload must include 'text' or 'topic'.")
+
+    # Extract comprehensive summary from Module 2 to preserve verification request context
+    comprehensive_summary = payload.get("comprehensive_summary") or None
 
     significance_raw = (
         payload.get("significance_score")
@@ -130,7 +144,7 @@ def _extract_statement_and_significance(payload: Dict[str, Any]) -> Tuple[str, f
         logger.warning("Significance %.3f outside [0, 1], clamping to range", significance)
         significance = max(0.0, min(1.0, significance))
 
-    return statement, significance
+    return statement, significance, comprehensive_summary
 
 
 def generate_perspectives(
@@ -145,7 +159,7 @@ def generate_perspectives(
 ) -> Dict[str, Any]:
     """Generate structured perspectives for the supplied input payload."""
 
-    statement, significance = _extract_statement_and_significance(input_payload)
+    statement, significance, comprehensive_summary = _extract_statement_and_significance(input_payload)
 
     perspective_count = int(math.ceil(128 * (significance ** 2.8) + 8))
     logger.info(
@@ -190,7 +204,7 @@ def generate_perspectives(
         color_name = group[0]["color"]
         logger.info("Processing %s perspectives (%d items)", color_name, len(group))
 
-        prompt_text = build_color_prompt(statement, group, existing_texts)
+        prompt_text = build_color_prompt(statement, group, existing_texts, comprehensive_summary)
         raw = call_model(client, resolved_endpoint, prompt_text, temperature=temperature)
 
         try:

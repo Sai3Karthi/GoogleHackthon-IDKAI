@@ -73,7 +73,9 @@ export function Module2() {
       const sessionData = getModule2Data()
       const hasSessionData = sessionData?.output !== undefined && sessionData?.output !== null
 
-      const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`)
+      const response = await fetch(`/module2/api/output?session_id=${encodedSessionId}`, {
+        signal: AbortSignal.timeout(60000)
+      })
 
       if (!response.ok) {
         const shouldRetry = attempt < POLL_MAX_RETRIES

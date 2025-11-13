@@ -669,10 +669,9 @@ export function Module3() {
         return
       }
 
-      console.log('[Module3] Backend idle, awaiting trigger')
-      setIsGenerating(false)
-      setLoading(false)
+      console.log('[Module3] Backend idle with no output, auto-triggering pipeline...')
       setCurrentStep(0)
+      void startPerspectiveGeneration()
     } catch (error) {
       console.error('[Module3] Error checking backend status:', error)
       setBackendRunning(false)

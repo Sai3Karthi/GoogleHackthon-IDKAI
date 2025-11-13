@@ -41,26 +41,34 @@ class DebateAgent:
         """Format perspective list into knowledge text - supports simple and enriched formats"""
         knowledge_text = []
         
+        knowledge_text.append("YOUR PERSPECTIVE ANGLES:")
         for idx, item in enumerate(perspectives, 1):
-            knowledge_text.append(f"\n[Perspective {idx}]")
-            knowledge_text.append(f"Statement: {item.get('text', '')}")
-            knowledge_text.append(f"Bias: {item.get('bias_x', 0)}, Significance: {item.get('significance_y', 0)}")
-            
-            # If enriched format with relevant links
+            knowledge_text.append(f"\n[Viewpoint {idx}]")
+            knowledge_text.append(f"Angle: {item.get('text', '')}")
+            knowledge_text.append(f"Bias score: {item.get('bias_x', 0)} (your ideological leaning on this topic)")
+            knowledge_text.append("")
+        
+        knowledge_text.append("\nAVAILABLE EVIDENCE (cite these in your arguments):")
+        evidence_count = 0
+        for idx, item in enumerate(perspectives, 1):
             relevant_links = item.get('relevant_links', [])
             if relevant_links:
-                knowledge_text.append("\nSupporting Evidence:")
-                for link in relevant_links:
-                    knowledge_text.append(f"  - {link.get('title', '')}")
-                    knowledge_text.append(f"    URL: {link.get('link', '')}")
-                    knowledge_text.append(f"    Trust Score: {link.get('trust_score', 0.5)} ({link.get('source_type', 'Unknown')})")
+                for link_idx, link in enumerate(relevant_links, 1):
+                    evidence_count += 1
+                    knowledge_text.append(f"\n[Evidence {evidence_count}]")
+                    knowledge_text.append(f"Title: {link.get('title', '')}")
+                    knowledge_text.append(f"URL: {link.get('link', '')}")
+                    knowledge_text.append(f"Source Type: {link.get('source_type', 'Unknown')}")
+                    knowledge_text.append(f"Trust Score: {link.get('trust_score', 0.5)}/1.0")
                     if link.get('snippet'):
-                        knowledge_text.append(f"    Snippet: {link['snippet']}")
+                        knowledge_text.append(f"Summary: {link['snippet'][:200]}")
                     if link.get('extracted_content'):
-                        content_preview = link['extracted_content'][:300].replace('\n', ' ')
-                        knowledge_text.append(f"    Content: {content_preview}...")
+                        content_preview = link['extracted_content'][:400].replace('\n', ' ')
+                        knowledge_text.append(f"Content excerpt: {content_preview}...")
                     knowledge_text.append("")
-            knowledge_text.append("")
+        
+        if evidence_count == 0:
+            knowledge_text.append("\n(No evidence available - argue based on perspectives only)")
         
         return "\n".join(knowledge_text)
     
@@ -99,26 +107,68 @@ class DebateAgent:
         
         return "\n".join(combined_knowledge)
     
-    def make_argument(self, topic: str, debate_context: str = "") -> str:
-        prompt = f"""You are {self.name}, representing a {self.role} perspective in a debate.
+    def make_argument(self, topic: str, debate_context: str = "", round_num: int = 1) -> str:
+        if round_num == 1:
+            stage = "OPENING STATEMENT"
+            instructions = """This is your opening statement. Introduce your position clearly.
 
-TOPIC TO DEBATE: {topic}
+What to do:
+- State whether you find the claim trustworthy, questionable, or false
+- Give 2-3 reasons why (brief overview)
+- Mention the type of evidence you'll present later
 
-YOUR KNOWLEDGE BASE:
+Speak naturally like a real debater. Keep it concise (100-150 words).
+DO NOT cite specific sources yet - save that for evidence rounds."""
+        
+        elif round_num in [2, 3]:
+            stage = "EVIDENCE PRESENTATION"
+            instructions = """Now present your evidence. This is where you back up your position with facts.
+
+For EACH piece of evidence you cite:
+- Name the source and its trust score
+- Quote or summarize what it says
+- Explain why this matters for your argument
+
+Present 2-3 strong pieces of evidence from your available evidence list.
+Speak like you're presenting facts to a jury (150-200 words).
+Cite sources properly: "According to [Source], which has a trust score of X.X..."."""
+        
+        elif round_num in [4, 5]:
+            stage = "CROSS-EXAMINATION"
+            instructions = """Time to challenge your opponent and defend your position.
+
+Attack their case:
+- Point out weak sources (low trust scores, questionable origins)
+- Show contradicting evidence from YOUR sources
+- Highlight logical flaws or speculation in their reasoning
+
+Present counter-evidence if you have it.
+Be assertive but factual. This is cross-examination (150-200 words)."""
+        
+        else:
+            stage = "CLOSING ARGUMENT"
+            instructions = """Final chance to make your case. Summarize and convince.
+
+Structure:
+1. Your strongest piece of evidence (cite it again)
+2. Why opponent's case is weaker
+3. What remains unclear or disputed
+4. Your final verdict with confidence level (High/Medium/Low certainty)
+
+Make it compelling and clear (150-200 words)."""
+        
+        prompt = f"""You are {self.name}, a debater representing the {self.role} viewpoint.
+
+DEBATE STAGE: {stage} (Round {round_num})
+TOPIC: {topic}
+
 {self.knowledge}
 
 {debate_context}
 
-Based on your knowledge base, make a clear, evidence-based argument about whether the topic/information is trustworthy.
+{instructions}
 
-Rules:
-1. Focus ONLY on the topic at hand - not all topics are political
-2. Use concrete evidence from your knowledge base (cite sources and trust scores)
-3. Your perspective comes from the sources you have access to ({self.role} sources), not from political ideology
-4. Be concise and clear - aim for 150-200 words
-5. Focus on: source credibility, evidence quality, factual accuracy
-6. Explain your reasoning simply and logically
-
+Speak naturally like a real debater. DO NOT just list perspectives - use them as your lens to interpret evidence.
 Your argument:"""
 
         try:
@@ -130,30 +180,64 @@ Your argument:"""
         except Exception as e:
             return f"Error generating argument: {str(e)}"
     
-    def respond_to_opponent(self, topic: str, opponent_argument: str, debate_history: str) -> str:
-        prompt = f"""You are {self.name}, representing a {self.role} perspective in a debate.
+    def respond_to_opponent(self, topic: str, opponent_argument: str, debate_history: str, round_num: int = 2) -> str:
+        if round_num in [2, 3]:
+            stage = "EVIDENCE PRESENTATION"
+            instructions = """Now present your evidence. Back up your position with facts.
 
-TOPIC: {topic}
+For EACH piece of evidence:
+- Name the source and trust score
+- Quote or summarize key findings
+- Explain relevance to your argument
 
-YOUR KNOWLEDGE BASE:
-{self.knowledge}
+Present 2-3 strong pieces of evidence from your available evidence list.
+Cite sources properly: "According to [Source], which has a trust score of X.X..."
+Speak like you're presenting to a jury (150-200 words)."""
+        
+        elif round_num in [4, 5]:
+            stage = "CROSS-EXAMINATION"
+            instructions = """Respond to your opponent's arguments. Challenge and counter.
 
-DEBATE HISTORY:
-{debate_history}
-
-OPPONENT'S LATEST ARGUMENT:
+OPPONENT SAID:
 {opponent_argument}
 
-Respond to your opponent's argument about the TOPIC. Counter their points with your evidence.
+Your response should:
+- Point out flaws in their sources (trust scores, bias, credibility issues)
+- Present contradicting evidence from YOUR evidence list
+- Expose logical gaps or unfounded assumptions
+- Distinguish confirmed facts from speculation
 
-Rules:
-1. Stay focused on the topic - "{topic}"
-2. Directly address opponent's specific claims with evidence from your knowledge base
-3. Point out if their sources are less trustworthy than yours (compare trust scores)
-4. Be concise and clear - aim for 150-200 words
-5. Use simple language that's easy to understand
-6. Don't make it political unless the topic itself is political
+Be assertive and factual (150-200 words)."""
+        
+        else:
+            stage = "CLOSING ARGUMENT"
+            instructions = """Final argument. Make your case one last time.
 
+OPPONENT'S POSITION:
+{opponent_argument}
+
+Your closing:
+1. Your strongest evidence (cite it)
+2. Why opponent's case fails
+3. What's still uncertain
+4. Final verdict (High/Medium/Low confidence)
+
+Be compelling and clear (150-200 words)."""
+        
+        prompt = f"""You are {self.name}, a debater representing the {self.role} viewpoint.
+
+DEBATE STAGE: {stage} (Round {round_num})
+TOPIC: {topic}
+
+{self.knowledge}
+
+DEBATE SO FAR:
+{debate_history[-1000:]}
+
+{instructions}
+
+Speak naturally like a real debater. Use evidence to support your viewpoint.
+DO NOT just repeat perspectives - interpret evidence through your lens.
 Your response:"""
 
         try:
@@ -173,58 +257,74 @@ class JudgeAgent:
         self.model = genai.GenerativeModel(model_name="gemini-2.0-flash")
     
     def evaluate_debate(self, topic: str, debate_transcript: str) -> Dict[str, any]:
-        prompt = f"""You are an impartial JUDGE evaluating a debate about the trustworthiness of information.
+        prompt = f"""You are an impartial JUDGE. Your job is to EDUCATE and CLARIFY truth for the user.
 
 TOPIC: {topic}
 
 FULL DEBATE TRANSCRIPT:
 {debate_transcript}
 
-Your task is to provide a final TRUST SCORE from 0-100% based on the debate.
+Provide a comprehensive evaluation that helps the user understand what's true, what's uncertain, and how to verify.
 
-Trust Score Scale:
-- 0-20%: Highly untrustworthy - Poor sources, weak evidence, contradictory information
-- 21-40%: Mostly untrustworthy - Significant concerns about credibility
-- 41-60%: Mixed reliability - Some valid points but major concerns remain
-- 61-80%: Mostly trustworthy - Good sources and evidence with minor concerns
-- 81-100%: Highly trustworthy - Excellent sources, strong evidence, consistent information
+Use this EXACT structure with clean formatting (no asterisks or markdown):
 
-Evaluation Criteria:
-- Quality and trustworthiness of sources cited (trust scores)
-- Strength of evidence presented by both sides
-- Logical consistency of arguments
-- Which side had more credible sources and stronger evidence
-- Overall credibility of the claims about this specific topic
+FINAL JUDGMENT
 
-Provide your judgment in the following format:
+1. CONFIRMED FACTS (What We Know For Certain)
+List facts verified by multiple credible sources with citations.
+Format each fact as:
+- [Fact statement] (Source: Title, Trust: X.XX)
+
+2. DISPUTED OR UNCLEAR (Areas of Disagreement)
+What's being debated and WHY people disagree.
+Explain conflicting interpretations and missing context.
+Use bullet points starting with -
+
+3. MOST LIKELY EXPLANATION (Assessment)
+Your best judgment based on evidence presented.
+State confidence level: High Confidence / Medium Confidence / Low Confidence
+Explain key reasoning in 2-3 sentences.
+
+4. RED FLAGS (Warning Signs)
+Signs of manipulation, bias, or missing critical context.
+Note emotional language vs factual claims.
+Identify speculation presented as fact.
+Use bullet points starting with -
+
+5. HOW TO VERIFY (Next Steps)
+What additional sources to check.
+Specific questions to investigate.
+How to spot similar situations.
+Use bullet points starting with -
 
 TRUST SCORE: [0-100]%
+Based on evidence quality, source credibility, and areas of agreement.
 
-REASONING:
-[In 150-200 words, explain your trust score clearly and simply. Analyze both sides' arguments and evidence. Use plain language that anyone can understand.]
-
-KEY FACTORS:
-- [List 3-4 key factors that influenced your trust score]
+Write naturally and clearly. Use bullet points with - not asterisks.
+NO markdown formatting like bold or italics.
+Be educational, not preachy. Acknowledge uncertainty where it exists.
 
 Your judgment:"""
 
         try:
             response = self.model.generate_content(
                 prompt,
-                generation_config={'temperature': 0.4, 'max_output_tokens': 600}
+                generation_config={'temperature': 0.4, 'max_output_tokens': 800}
             )
             
             text = response.text.strip()
             
-            trust_score = 50  # Default to middle if parsing fails
+            # Clean up any remaining markdown artifacts
+            text = text.replace('**', '')
+            text = text.replace('##', '')
+            
+            trust_score = 50
             if "TRUST SCORE:" in text:
                 score_line = text.split("TRUST SCORE:")[1].split("\n")[0].strip()
-                # Extract number from string like "75%" or "75"
                 import re
                 numbers = re.findall(r'\d+', score_line)
                 if numbers:
                     trust_score = int(numbers[0])
-                    # Ensure it's within 0-100
                     trust_score = max(0, min(100, trust_score))
             
             return {
@@ -261,8 +361,8 @@ class DebateOrchestrator:
         leftist_perspectives: List[Dict],
         rightist_perspectives: List[Dict],
         common_perspectives: List[Dict],
-        max_rounds: int = 3,
-        min_rounds: int = 1,
+        max_rounds: int = 7,
+        min_rounds: int = 6,
         progress_callback: Optional[Callable[[Dict], None]] = None,
     ) -> Dict:
         """
@@ -312,11 +412,11 @@ class DebateOrchestrator:
         
         debate_transcript = []
         
-        # Round 1: Initial arguments
+        # Round 1: Opening statements
         emit("round_start", round=1)
-        print("Round 1: Initial arguments")
+        print("Round 1: Opening Statements")
         
-        leftist_arg = leftist.make_argument(topic)
+        leftist_arg = leftist.make_argument(topic, round_num=1)
         debate_transcript.append({"agent": "Leftist Agent", "argument": leftist_arg, "round": 1})
         emit(
             "agent_argument",
@@ -326,7 +426,7 @@ class DebateOrchestrator:
             round=1,
         )
         
-        rightist_arg = rightist.make_argument(topic)
+        rightist_arg = rightist.make_argument(topic, round_num=1)
         debate_transcript.append({"agent": "Rightist Agent", "argument": rightist_arg, "round": 1})
         emit(
             "agent_argument",
@@ -336,7 +436,7 @@ class DebateOrchestrator:
             round=1,
         )
         
-        common_arg = common.make_argument(topic)
+        common_arg = common.make_argument(topic, round_num=1)
         debate_transcript.append({"agent": "Common Agent", "argument": common_arg, "round": 1})
         emit(
             "agent_argument",
@@ -346,11 +446,11 @@ class DebateOrchestrator:
             round=1,
         )
         
-        # Additional rounds
+        # Additional rounds with stage-based prompts
         current_round = 2
         while current_round <= max_rounds:
             if current_round > min_rounds:
-                # Check if should continue
+                # Check if should continue (only after minimum rounds)
                 recent_args = "\n\n".join([
                     f"{t['agent']}: {t['argument']}" 
                     for t in debate_transcript[-4:]
@@ -367,16 +467,24 @@ class DebateOrchestrator:
                 except:
                     pass
             
+            # Determine stage name for logging
+            if current_round in [2, 3]:
+                stage_name = "Evidence Presentation"
+            elif current_round in [4, 5]:
+                stage_name = "Cross-Examination"
+            else:
+                stage_name = "Closing Arguments"
+            
             emit("round_start", round=current_round)
-            print(f"Round {current_round}: Responses")
+            print(f"Round {current_round}: {stage_name}")
             
             debate_history = "\n\n".join([
                 f"[{t['agent']}]: {t['argument']}" 
                 for t in debate_transcript
             ])
             
-            # Agents respond
-            leftist_response = leftist.respond_to_opponent(topic, rightist_arg, debate_history)
+            # Agents respond with round-specific prompts
+            leftist_response = leftist.respond_to_opponent(topic, rightist_arg, debate_history, round_num=current_round)
             debate_transcript.append({"agent": "Leftist Agent", "argument": leftist_response, "round": current_round})
             emit(
                 "agent_argument",
@@ -386,7 +494,7 @@ class DebateOrchestrator:
                 round=current_round,
             )
             
-            rightist_response = rightist.respond_to_opponent(topic, leftist_arg, debate_history)
+            rightist_response = rightist.respond_to_opponent(topic, leftist_arg, debate_history, round_num=current_round)
             debate_transcript.append({"agent": "Rightist Agent", "argument": rightist_response, "round": current_round})
             emit(
                 "agent_argument",
@@ -396,7 +504,7 @@ class DebateOrchestrator:
                 round=current_round,
             )
             
-            common_response = common.respond_to_opponent(topic, leftist_arg, debate_history)
+            common_response = common.respond_to_opponent(topic, leftist_arg, debate_history, round_num=current_round)
             debate_transcript.append({"agent": "Common Agent", "argument": common_response, "round": current_round})
             emit(
                 "agent_argument",
